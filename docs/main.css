@@ -1045,10 +1045,10 @@ a:hover { text-decoration: underline; }
   z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  height: 28px;
-  padding: 0 16px;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 36px;
+  padding: 4px 16px;
   background: linear-gradient(90deg,
     rgba(255, 180, 84, 0.18) 0%,
     rgba(255, 180, 84, 0.10) 50%,
@@ -1059,6 +1059,12 @@ a:hover { text-decoration: underline; }
   color: var(--amber);
   letter-spacing: 0.04em;
   white-space: nowrap;
+}
+.static-banner .sb-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1070,7 +1076,52 @@ a:hover { text-decoration: underline; }
   padding-bottom: 1px;
 }
 .static-banner a:hover { color: #fff; border-color: #fff; text-decoration: none; }
-body.has-static-banner .grid { height: calc(100vh - 64px - 28px); }
+body.has-static-banner .grid { height: calc(100vh - 64px - 36px); }
+
+/* segmented setting switcher (right side of static banner) */
+.demo-switcher {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 180, 84, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+.demo-switcher button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  padding: 4px 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+.demo-switcher button + button {
+  border-left: 1px solid rgba(255, 180, 84, 0.18);
+}
+.demo-switcher button:hover:not(.is-active) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+.demo-switcher button.is-active {
+  background: rgba(255, 180, 84, 0.18);
+  color: var(--amber);
+  box-shadow: inset 0 -2px 0 rgba(255, 180, 84, 0.4);
+}
+.demo-switcher button.is-active:hover {
+  background: rgba(255, 180, 84, 0.24);
+}
+.demo-switcher button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
 
 .btn.is-disabled {
   opacity: 0.35;
@@ -1093,4 +1144,6 @@ body.has-static-banner .grid { height: calc(100vh - 64px - 28px); }
 @media (max-width: 1024px) {
   .grid { grid-template-columns: 200px 1fr 340px; }
   .pills { display: none; }
+  .static-banner .sb-label,
+  .static-banner .sb-sep { display: none; }
 }

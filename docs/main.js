@@ -10,9 +10,19 @@
 // The UI shows logical paths like `state/chapters/ch001.md` so the mental model
 // matches the design doc (state lives in files). Internally, those paths
 // resolve to files committed in the repo.
-const SNAPSHOT_BASE = './demo_snapshot/';
-const RULES_BASE    = './rules/';
-const AGENTS_PATH   = './AGENTS.md';
+//
+// SNAPSHOT_BASE is mutable — judges can toggle between demo settings
+// (gangster-HK-1983 / xianxia-ascension) via the segmented control in the
+// static banner. The xianxia folder may not exist yet; see reloadAfterSwitch()
+// for the graceful fallback.
+const DEMO_SETTINGS = [
+  { id: 'gangster', label: '港综 · 1983', base: './demo_snapshot/' },
+  { id: 'xianxia',  label: '仙侠 · 飞升', base: './demo_snapshot_xianxia/' },
+];
+let activeDemo = 'gangster';
+let SNAPSHOT_BASE = DEMO_SETTINGS[0].base;
+const RULES_BASE   = './rules/';
+const AGENTS_PATH  = './AGENTS.md';
 
 function resolvePath(logicalPath) {
   // `state/chapters/ch001.md`  -> `../demo_snapshot/chapters/ch001.md`
@@ -801,18 +811,125 @@ function wireButtons() {
   $('#btn-reload').addEventListener('click', () => location.reload());
 }
 
+// ---------- demo-setting switcher ----------
+// Judges can toggle between gangster-HK-1983 and xianxia-ascension without
+// navigating away. Choice persists in localStorage. Missing folders fall back
+// to gangster with a toast.
+function initDemoSwitcher() {
+  const saved = localStorage.getItem('bnp_demo_setting');
+  if (saved === 'xianxia') {
+    activeDemo = 'xianxia';
+    SNAPSHOT_BASE = DEMO_SETTINGS[1].base;
+  }
+  $$('.demo-switcher button').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.demo === activeDemo);
+    btn.addEventListener('click', () => setActiveDemo(btn.dataset.demo));
+  });
+}
+
+async function setActiveDemo(id) {
+  if (id === activeDemo) return;
+  const conf = DEMO_SETTINGS.find((d) => d.id === id);
+  if (!conf) return;
+  activeDemo = id;
+  SNAPSHOT_BASE = conf.base;
+  localStorage.setItem('bnp_demo_setting', id);
+  $$('.demo-switcher button').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.demo === id);
+  });
+  // Clear all snapshot-scoped state so we don't leak data across settings.
+  state.snapshot = null;
+  state.prompts = [];
+  state.openFile = null;
+  state.openPromptIds = new Set();
+  state.fileCache = new Map();
+  state.existCache = new Map();
+  await reloadAfterSwitch();
+}
+
+async function reloadAfterSwitch() {
+  try {
+    state.snapshot = await buildSnapshot();
+  } catch (e) {
+    // Graceful fallback: if xianxia (or any non-gangster) snapshot can't be
+    // loaded, revert to gangster and let the judge see something.
+    if (activeDemo !== 'gangster') {
+      const missingLabel = DEMO_SETTINGS.find((d) => d.id === activeDemo)?.label || activeDemo;
+      toast(`${missingLabel} demo 尚未生成，已切回港综`, false);
+      activeDemo = 'gangster';
+      SNAPSHOT_BASE = DEMO_SETTINGS[0].base;
+      localStorage.setItem('bnp_demo_setting', 'gangster');
+      $$('.demo-switcher button').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.demo === 'gangster');
+      });
+      try {
+        state.snapshot = await buildSnapshot();
+      } catch (e2) {
+        toast('加载失败: ' + e2.message, true);
+        return;
+      }
+    } else {
+      toast('加载失败: ' + e.message, true);
+      return;
+    }
+  }
+  renderPills();
+  renderTree();
+  renderPrompts();
+  renderBrandSub();
+  const produced = state.snapshot.chapters.find((c) => c.has_md);
+  if (produced) {
+    openFile(`state/chapters/ch${String(produced.ch).padStart(3, '0')}.md`);
+  } else {
+    // Newly-active demo hasn't produced any chapters — clear the viewer.
+    const viewer = $('#viewer');
+    if (viewer) {
+      viewer.innerHTML = '';
+      viewer.appendChild(el('div', { class: 'placeholder' },
+        el('div', { class: 'placeholder-mark' }, '◐'),
+        el('div', { class: 'placeholder-title' }, '该题材暂无已生成章节'),
+        el('div', { class: 'placeholder-sub' }, '请等待流水线跑完, 或切换到其他题材。'),
+      ));
+    }
+    $('#viewer-meta').textContent = '';
+  }
+}
+
 async function init() {
   wireTabs();
   wireButtons();
+  initDemoSwitcher();
 
   try {
     state.snapshot = await buildSnapshot();
   } catch (e) {
-    $('#tree').innerHTML = '';
-    $('#tree').appendChild(el('div', { class: 'tree-empty' },
-      '无法加载 demo_snapshot/: ' + e.message));
-    toast('加载失败: ' + e.message, true);
-    return;
+    // First-load fallback: if the persisted xianxia choice can't load, try
+    // gangster before giving up entirely.
+    if (activeDemo !== 'gangster') {
+      const missingLabel = DEMO_SETTINGS.find((d) => d.id === activeDemo)?.label || activeDemo;
+      toast(`${missingLabel} demo 尚未生成，已切回港综`, false);
+      activeDemo = 'gangster';
+      SNAPSHOT_BASE = DEMO_SETTINGS[0].base;
+      localStorage.setItem('bnp_demo_setting', 'gangster');
+      $$('.demo-switcher button').forEach((btn) => {
+        btn.classList.toggle('is-active', btn.dataset.demo === 'gangster');
+      });
+      try {
+        state.snapshot = await buildSnapshot();
+      } catch (e2) {
+        $('#tree').innerHTML = '';
+        $('#tree').appendChild(el('div', { class: 'tree-empty' },
+          '无法加载 demo_snapshot/: ' + e2.message));
+        toast('加载失败: ' + e2.message, true);
+        return;
+      }
+    } else {
+      $('#tree').innerHTML = '';
+      $('#tree').appendChild(el('div', { class: 'tree-empty' },
+        '无法加载 demo_snapshot/: ' + e.message));
+      toast('加载失败: ' + e.message, true);
+      return;
+    }
   }
 
   renderPills();
