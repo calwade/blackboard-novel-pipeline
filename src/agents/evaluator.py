@@ -30,13 +30,8 @@ import re
 import time
 
 from ._base import BaseAgent
+from ._verdict_schema import LANDMINE_IDS, validate_verdict
 from ..blackboard import Blackboard
-
-
-# The 18 landmine IDs we expect the Evaluator to score. Keep this list in
-# sync with rules/18-landmines.md section titles. The Evaluator prompt
-# enforces that the output JSON contains every key.
-LANDMINE_IDS = [f"landmine_{i}" for i in range(1, 19)]
 
 
 class Evaluator(BaseAgent):
@@ -139,81 +134,42 @@ class Evaluator(BaseAgent):
         return system, user, inputs_read
 
     def _handle_output(self, bb: Blackboard, raw: str, *, chapter: int, **_):
-        verdict = _parse_json(raw)
-        # Defensive: ensure all landmine keys exist
-        for mine in LANDMINE_IDS:
-            if mine not in verdict.get("landmines", {}):
-                verdict.setdefault("landmines", {})[mine] = {
-                    "hit": False,
-                    "evidence": None,
-                    "severity": None,
-                }
+        # Parse JSON defensively (strip markdown fences if any)
+        try:
+            parsed = _parse_json(raw)
+        except (json.JSONDecodeError, ValueError) as e:
+            # Malformed JSON at parse level — synthesize failing verdict
+            parsed = {"_parse_error": f"JSON parse failed: {e}"}
 
-        # ---- Skeleton detector (guards against the model echoing prompt example) ----
-        # The earlier version of this prompt embedded a JSON schema with literal
-        # "…" placeholders, and the model occasionally echoed the skeleton verbatim.
-        # The current prompt no longer embeds placeholders, but we keep this detector
-        # as belt-and-suspenders: flag any top_3_fixes where ALL entries contain
-        # placeholder-looking strings, OR where a where/what value is shorter than
-        # 6/10 chars (the prompt's explicit minimums).
-        top_fixes = verdict.get("top_3_fixes") or []
-        skeleton_markers = {"…", "...", "", "..", "。。。"}
+        # Validate + normalize + detect skeleton (pure function, unit-tested)
+        result = validate_verdict(parsed)
+        verdict = result["clean_verdict"]
+        warnings = result["validation_warnings"]
+        skeleton = result["skeleton_detected"]
 
-        def _is_placeholder_fix(f: dict) -> bool:
-            where = (f.get("where") or "").strip()
-            what = (f.get("what") or "").strip()
-            if where in skeleton_markers or what in skeleton_markers:
-                return True
-            if len(where) < 6 or len(what) < 10:
-                return True
-            return False
-
-        is_skeleton = bool(top_fixes) and all(_is_placeholder_fix(f) for f in top_fixes)
-
-        if is_skeleton:
-            # Mark this verdict as a skeleton false-pass. Pipeline will treat as
-            # retry-needed. We don't silently accept.
-            verdict["_skeleton_detected"] = True
-            verdict["overall_pass"] = False
-            # Ensure one high-severity synthetic hit so the retry loop trips
-            verdict["landmines"]["landmine_1"] = {
-                "hit": True,
-                "evidence": "[skeleton_detector] Evaluator 返回了 prompt 里的 JSON 示例骨架或过短引文，未实际判稿。",
-                "severity": "high",
-            }
-            verdict["top_3_fixes"] = [
-                {
-                    "where": "Evaluator 上一次调用返回占位符",
-                    "what": "重新判稿，where 必须是原文具体引文 ≥6 字，what 必须是改写方向 ≥10 字。",
-                }
-            ]
-        else:
-            # Recompute overall_pass for consistency (don't trust the model)
-            mines = verdict["landmines"]
-            high_hits = sum(
-                1 for m in mines.values() if m.get("hit") and m.get("severity") == "high"
-            )
-            med_hits = sum(
-                1 for m in mines.values() if m.get("hit") and m.get("severity") == "medium"
-            )
-            verdict["overall_pass"] = high_hits == 0 and med_hits < 2
+        # Surface warnings for observability. Stored in the verdict file so the
+        # Inspector can show them alongside the rubric.
+        if warnings:
+            verdict["_validation_warnings"] = warnings
 
         bb.write_json(f"chapters/ch{chapter:03d}.verdict.json", verdict)
 
-        # Log individual issues
-        ts = time.time()
-        for mine_id, entry in verdict["landmines"].items():
-            if entry.get("hit"):
-                bb.append_jsonl(
-                    "issues.jsonl",
-                    {
-                        "ts": ts,
-                        "chapter": chapter,
-                        "landmine_id": mine_id,
-                        "severity": entry.get("severity"),
-                        "evidence": entry.get("evidence"),
-                    },
-                )
+        # Log individual issues (skip synthetic skeleton hits — those aren't
+        # about the chapter, they're about the evaluator output itself)
+        if not skeleton:
+            ts = time.time()
+            for mine_id, entry in verdict["landmines"].items():
+                if entry.get("hit"):
+                    bb.append_jsonl(
+                        "issues.jsonl",
+                        {
+                            "ts": ts,
+                            "chapter": chapter,
+                            "landmine_id": mine_id,
+                            "severity": entry.get("severity"),
+                            "evidence": entry.get("evidence"),
+                        },
+                    )
 
 
 def _parse_json(raw: str):
