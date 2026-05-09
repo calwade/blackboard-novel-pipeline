@@ -1,0 +1,31 @@
+{
+  "results": [
+    {
+      "case_id": "case-01-clean-pass-gangster",
+      "setting": "gangster-hk-1983",
+      "source_file": "case-01-clean-pass-gangster.yaml",
+      "duration_s": 17.3,
+      "actual_pass": true,
+      "expected_pass": true,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {},
+      "expected_hits": {},
+      "true_positives": [],
+      "false_negatives": [],
+      "false_positives": [],
+      "severity_mismatches": [],
+      "recall": null,
+      "precision": null,
+      "chapter_chars": 486
+    }
+  ],
+  "totals": {
+    "pass_agreement_count": 1,
+    "pass_agreement_rate": 1.0,
+    "recall_avg": null,
+    "precision_avg": null,
+    "skeleton_count": 0,
+    "total_duration_s": 17.3
+  }
+}

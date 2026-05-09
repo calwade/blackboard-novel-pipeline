@@ -1,0 +1,25 @@
+id: case-06-landmine-cascade-two-medium
+setting: gangster-hk-1983
+description: |
+  双medium命中使overall_pass=false。landmine_4(视角杂乱):同一场景中先写林家耀
+  内心活动，再短暂跳到阿威视角描述其心理，又跳回林家耀——视角三次跳转。
+  landmine_9(节奏失控):主角刚经历激烈冲突就突然跳到第二天，中间无过渡。
+  两个medium组合，overall_pass应为false。其余16个landmine不得触发。
+expected_verdict:
+  overall_pass: false
+  hits:
+    - landmine_id: landmine_4
+      severity: medium
+    - landmine_id: landmine_9
+      severity: medium
+  tolerated_extra_hits: []
+chapter_md: |
+  林家耀每天早晨六点起床。冷水洗脸，翻出那双快要穿孔的布鞋，下楼。
+
+  巷口粥铺，一碗皮蛋瘦肉粥，坐在胶凳上慢慢喝。粥底绵滑，姜丝切得细。他喝完付钱，骑上从赵老四那里借来的单车，沿弥敦道去尖沙咀码头。等了十五分钟，等的人没来。骑回旺角，拐进茶餐厅要了杯冻鸳鸯。
+
+  阿威此刻在广华医院三楼走廊里站着。手心全是汗。不是怕——医生说了病情稳定——他是想起了昨天晚上的事。平头临走在阿威耳边说了一句很轻的话，轻到只有他一个人听见。那句话像一根针扎在他脑子里。他不知道该不该告诉林家耀。告诉了，林家耀会算账。不算清楚之前，阿威不敢开口。
+
+  林家耀喝完冻鸳鸯，出了茶餐厅。阳光刺眼。他眯眼看表——下一件事下午两点，中环干诺道中。
+
+  当天夜里，大雨。雨水砸在铁皮棚顶上，响声像打鼓。林家耀躺在床上盯着天花板的水渍——比昨天又扩了一圈。天花板迟早要穿，但那是兰姐的事。他的事是明天怎么回那三个收数仔的话。
