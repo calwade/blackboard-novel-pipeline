@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blackboard Novel Pipeline · 港务档案 1983 · 静态演示</title>
+<meta name="description" content="多智能体写作流水线 · 黑板 + Auditor Fan-Out + Evaluator 半 Debate · GitHub Pages 静态演示" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="main.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js" defer></script>
+<script src="main.js" defer></script>
+</head>
+<body class="has-static-banner">
+
+<div class="static-banner" role="note">
+  <span class="sb-mark">◐</span>
+  <span>静态演示 · 本页面由 GitHub Pages 托管，所有数据从 <code>demo_snapshot/</code> 读取</span>
+  <span class="sb-sep">·</span>
+  <span>完整代码：<a href="https://github.com/calwade/blackboard-novel-pipeline" target="_blank" rel="noopener">GitHub ↗</a></span>
+</div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◐</span>
+    <div class="brand-text">
+      <div class="brand-title">Blackboard Novel Pipeline</div>
+      <div class="brand-sub">港务档案 · 1983 &nbsp;—&nbsp; 多智能体写作流水线 · 只读快照</div>
+    </div>
+  </div>
+
+  <div class="pills" id="pills">
+    <span class="pill pill-muted"><span class="pill-label">Chapter</span><span id="pill-chapter">—</span></span>
+    <span class="pill pill-muted"><span class="pill-label">Running</span><span id="pill-running">idle</span></span>
+    <span class="pill pill-muted"><span class="pill-label">Debt</span><span id="pill-debt">0</span></span>
+    <span class="pill pill-muted"><span class="pill-label">LLM calls</span><span id="pill-calls">0</span></span>
+  </div>
+
+  <div class="actions">
+    <button id="btn-run" class="btn btn-primary is-disabled" title="静态演示只读 · 完整版本见 GitHub" disabled>
+      <span class="btn-glyph">▶</span>生成下一章
+    </button>
+    <button id="btn-audit" class="btn is-disabled" title="静态演示只读 · 完整版本见 GitHub" disabled>
+      <span class="btn-glyph">↻</span>重审当前章
+    </button>
+    <button id="btn-reload" class="btn btn-ghost" title="重载页面">
+      <span class="btn-glyph">⟳</span>刷新
+    </button>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- LEFT: file tree -->
+  <aside class="col col-left">
+    <div class="col-header">
+      <span class="col-title">state/ &nbsp;·&nbsp; 文件即真源</span>
+      <span class="col-hint">点击 → 查看</span>
+    </div>
+    <nav id="tree" class="tree" aria-label="state file tree">
+      <div class="tree-empty">加载中…</div>
+    </nav>
+    <div class="tree-legend">
+      <div class="legend-note">每个 Agent 只读它需要的那几个文件，产物再落回此处。</div>
+    </div>
+  </aside>
+
+  <!-- CENTER: viewer -->
+  <section class="col col-center">
+    <div class="tabs" role="tablist">
+      <button class="tab tab-active" data-tab="chapter" role="tab">Chapter</button>
+      <button class="tab" data-tab="debt" role="tab">Debt<span id="tab-debt-count" class="tab-badge"></span></button>
+      <button class="tab" data-tab="rules" role="tab">Rules</button>
+      <div class="tab-spacer"></div>
+      <div class="viewer-meta" id="viewer-meta"></div>
+    </div>
+
+    <div class="tab-body">
+      <div class="tab-pane tab-pane-active" data-pane="chapter">
+        <article id="viewer" class="viewer">
+          <div class="placeholder">
+            <div class="placeholder-mark">◐</div>
+            <div class="placeholder-title">点击左侧文件查看</div>
+            <div class="placeholder-sub">章节正文将以 Markdown 渲染；<br/>.json / .yaml / .jsonl 会以源码显示。</div>
+          </div>
+        </article>
+      </div>
+
+      <div class="tab-pane" data-pane="debt">
+        <div id="debt-view" class="debt-view">
+          <div class="placeholder"><div class="placeholder-title">加载中…</div></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="rules">
+        <article id="rules-viewer" class="viewer">
+          <div class="placeholder">
+            <div class="placeholder-title">从左侧 rules/ 选择一份规则</div>
+            <div class="placeholder-sub">Progressive Disclosure — 每个 Agent 只加载它需要的那份。</div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: prompt inspector -->
+  <aside class="col col-right">
+    <div class="tabs tabs-right" role="tablist">
+      <button class="tab tab-active" data-rtab="inspector" role="tab">Prompt Inspector</button>
+      <button class="tab" data-rtab="log" role="tab">Log</button>
+      <div class="tab-spacer"></div>
+      <span class="live-dot" id="live-dot" title="静态快照" style="animation:none;opacity:0.5;background:var(--text-soft);box-shadow:none;"></span>
+    </div>
+
+    <div class="tab-body tab-body-right">
+      <div class="tab-pane tab-pane-active" data-rpane="inspector">
+        <div class="inspector-hint">
+          <strong>每一次调用都是全新上下文</strong>
+          <span>独立 system prompt · 只读声明好的文件 · 无对话历史</span>
+        </div>
+        <div id="inspector" class="inspector">
+          <div class="placeholder"><div class="placeholder-title">加载中…</div></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-rpane="log">
+        <div id="log-view" class="log-view"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
