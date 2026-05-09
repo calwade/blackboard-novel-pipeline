@@ -1,0 +1,20 @@
+{
+  "current_chapter": 10,
+  "completed_chapters": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "in_flight": null,
+  "last_update": "2026-05-10T07:02:12",
+  "total_llm_calls": 0,
+  "active_setting": "gangster-hk-1983",
+  "bootstrapped_at": "2026-05-10T06:32:20"
+}
