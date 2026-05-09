@@ -135,7 +135,7 @@ blackboard-novel-pipeline/
   - 完整 `user` prompt
   - 完整 `output`
   - `📋 Fresh context · N tokens — 这次调用没有任何继承上下文`
-- **顶部按钮**：生成下一章 / 重审当前章 / **重置并续写**（后者演示：进程重启，状态从文件恢复）
+- **顶部按钮**：生成下一章 / 重审当前章 / 刷新（后两者演示：进程可重启，状态从文件恢复——reload 即 Context Reset 的隐喻；真正的进程级 reset 见 `python -m src.pipeline --chapter N` CLI）
 
 ---
 
@@ -158,7 +158,7 @@ blackboard-novel-pipeline/
 python -m pytest tests/ -v
 ```
 
-当前测试：黑板的原子写、jsonl 顺序保证、YAML 往返。覆盖率约 85%（集中在关键的 I/O 层）。Agent 之间通过端到端运行验证，不另写单元测试 —— 小说 Agent 的单元测试没意义，结果必须人看。
+当前测试：黑板的原子写、jsonl 顺序保证、YAML 往返（`tests/test_blackboard.py`，6 个用例）。**覆盖范围仅限 `src/blackboard.py`**——Agent 和 Pipeline 通过端到端运行验证，不另写单元测试。小说 Agent 的单元测试意义不大，输出质量必须人看（见 `demo_snapshot/` 下 3 章实测产出）。
 
 ---
 

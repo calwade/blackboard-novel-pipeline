@@ -35,9 +35,17 @@ class Planner(BaseAgent):
         if cur is None:
             raise ValueError(f"Chapter {chapter} not in outline")
 
+        # Setting metadata for the persona line
+        try:
+            setting = bb.read_yaml("setting.yaml")
+        except (OSError, Exception):
+            setting = {}
+        genre = setting.get("genre", "通用小说")
+        era_label = setting.get("era", "")
+
         # Read the previous two summaries for narrative continuity (short)
         prior_summaries = []
-        inputs_read: list[str] = ["state/outline.json"]
+        inputs_read: list[str] = ["state/outline.json", "state/setting.yaml"]
         for n in (chapter - 2, chapter - 1):
             if n >= 1:
                 path = f"summaries/ch{n:03d}.md"
@@ -52,7 +60,7 @@ class Planner(BaseAgent):
         )
 
         system = (
-            "你是拥有 20 年经验的网络小说责编，专精港综同人与 1980s 香港题材。\n"
+            f"你是拥有 20 年经验的网络小说责编。当前题材：{genre}；时代/世界观：{era_label}。\n"
             "你的任务：把一章的『大纲条目』细化为 Generator 可以直接下笔的『节拍表』。\n"
             "绝对铁律：\n"
             "1. 严格输出 JSON，不写任何散文或解释。\n"

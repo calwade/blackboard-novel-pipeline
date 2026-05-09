@@ -1,0 +1,41 @@
+# Setting: 港综同人 1983
+# Gangster Hong Kong 1983 — authoritative metadata for this setting pack.
+
+id: gangster-hk-1983
+display_name: 港综同人 · 1983
+subtitle: 一个福建仔、一张情报表、一座永远在涨潮的城市
+locale: zh-Hans
+
+genre: 港综同人（都市犯罪 + 市井江湖 + 金融操盘）
+era: 1983-2000 香港
+tone: 暴力美学 + 克制算计 + 市井温度
+
+# Narrative anchors — passed to Planner/Generator as top-level context
+protagonist_name: 林家耀
+protagonist_hook: 福建新移民、父亲旧为国民党情报人员、携一枚只能查询 1983-2000 公开事件的系统抵港
+opening_year_month: 1983-06
+chapter_count_target: 800
+chapters_in_outline: 10
+
+# Which extra rule/style files live in this setting
+# (Agents will load these from state/ after bootstrap)
+extra_files:
+  timeline: timeline.yaml
+  characters: characters.yaml
+  era: era.md
+  writing_style_extra: writing-style-extra.md
+  iron_laws_extra: iron-laws-extra.md
+
+# Author-mode hints the Generator will fold into its persona prompt
+author_persona_hints:
+  - 专精 1980s 港片和港综题材
+  - 熟悉粤语俚语（咪郁、扑街、靓仔、睇场、大佬）
+  - 克制、冷笔，不抒情，不煽情
+  - 场景感强，具体到物价、街道、饮食
+
+# Avoid-list reminders Generator can reference in prompts
+genre_avoid:
+  - 跪舔洋人的叙事（Mr. Walsh 是被利用的对象，不是救世主）
+  - 真名直用（霍英东 → 霍官泰；李嘉诚 → 李超人；邵逸夫 → 邵老板）
+  - 玄幻超能力（系统是"查询"，不是"输出"）
+  - 圣母/降智/双标

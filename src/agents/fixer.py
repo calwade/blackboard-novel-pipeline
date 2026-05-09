@@ -3,7 +3,7 @@
 Reads:
   - state/chapters/ch{N:03d}.md
   - state/chapters/ch{N:03d}.verdict.json (top_3_fixes + hit landmines)
-  - rules/writing-style.md
+  - rules/writing-style-core.md  + state/writing-style-extra.md
 
 Writes (overwrites):
   - state/chapters/ch{N:03d}.md
@@ -30,12 +30,14 @@ class Fixer(BaseAgent):
 
         chapter_text = bb.read_text(chapter_path)
         verdict = bb.read_json(verdict_path)
-        style = self._read_rule("writing-style.md")
+        style_core = self._read_rule("writing-style-core.md")
+        style_extra = bb.read_text("writing-style-extra.md")
 
         inputs_read = [
             f"state/{chapter_path}",
             f"state/{verdict_path}",
-            "rules/writing-style.md",
+            "state/writing-style-extra.md",
+            "rules/writing-style-core.md",
         ]
 
         # Gather hit landmines for surgical reference
@@ -58,7 +60,10 @@ class Fixer(BaseAgent):
             "5. 输出完整的修改后章节正文（包括章节标题），不要输出任何解释、diff、总结。\n"
             "\n"
             "# 写作风格（你的基准，回答时别写成 AI 味）\n\n"
-            + style
+            "## 通用规范\n\n"
+            + style_core
+            + "\n\n## 题材特有风格（setting 注入）\n\n"
+            + style_extra
         )
 
         user = (
