@@ -1,18 +1,18 @@
-# Blackboard Novel Pipeline — 设计文档
+# Blackboard Novel Pipeline — 架构设计
 
 > **项目代号**：`blackboard-novel-pipeline`
-> **参赛赛事**：傅盛 AI 战队青少年黑客松（2026）
-> **主题**：打造你的多 Agent AI 数字团队
-> **截止**：2026-05-10 23:59 北京时间
-> **应用场景**：通用多 Agent 小说写作流水线；内置港综与仙侠两个 Setting 示例
+> **定位**：通用多 Agent 小说写作流水线
+> **核心决策**：题材通过 Setting Pack 注入，`src/` 对题材无感知
 
 ---
 
 ## 0. 一句话说明
 
-把 Anthropic / Cognition / OpenAI 在长链路 Agent 上踩过的 5 个坑（自评偏乐观、Context Anxiety、AI Slop、AGENTS.md 百科病、缺反馈回路）**当作架构约束**，设计一个能稳定产出连贯小说章节的多 Agent 流水线，并把"怎么规避这些坑"变成可在 60 秒内演示出来的 UI 行为。
+把 Anthropic / Cognition / OpenAI 在长链路 Agent 上踩过的 5 个坑（自评偏乐观、Context Anxiety、AI Slop、AGENTS.md 百科病、缺反馈回路）**当作架构约束**，设计一个能稳定产出连贯小说章节的多 Agent 流水线。
 
 流水线本身对题材完全无知，具体题材（港综、仙侠、都市、赛博……）通过 **Setting Pack** 注入（见第 7 节）。
+
+**当前阶段 / 演进路线**：本文档描述系统的**架构骨架**。骨架已落地（7 Agent + 2 题材各 3 章产出）。从 MVP 升级到"大而全通用系统"的 gap 分析、补齐清单与优先级路线图见 [`docs/gap-analysis-post-mvp.md`](../../gap-analysis-post-mvp.md)。
 
 ---
 
@@ -255,61 +255,12 @@ blackboard-novel-pipeline/
 
 ---
 
-## 6. Web 演示页（60 秒 pitch 的核心武器）
+## 6. Setting System
 
-**三面板布局**：
+原本的设计把"港综 1983"硬编码到 `rules/`、`src/agents/*.py` 与文档中。
+架构审查阶段识别到这违反了"通用多 Agent 团队"的初衷：架构与具体题材未分离。
 
-- **左**：`state/` 文件树浏览器。实时刷新。点文件 → 右侧主区展示内容。演示"状态外化到文件"。
-- **中**：当前章节全文 + 下方 `debt.jsonl` 表格（每行一个未解决问题，带章节号和严重度）。演示"带债上线"=Lesson 4。
-- **右（可切换 tab）**：
-  - **Prompt Inspector**：`prompts_log.jsonl` 的时间线视图。每条记录包含：调用时间、agent 名、输入文件列表、完整 system prompt、完整 user prompt、output、用时、token 数。这是演示"Context Reset + 独立会话"的决定性证据。
-  - **Agent Log**：简洁的 role 色彩流水日志。
-
-**顶部按钮**：
-- `生成下一章` — 触发一次完整流水线
-- `全量审计` — 对所有已生成章节跑一遍 Auditor
-- `重置并续写` — 删除内存进程，重新起 Python 进程，从 `state/progress.json` 恢复（**现场演示 Context Reset**）
-
----
-
-## 7. MVP 范围（≤24h 可交付）
-
-### ✅ 必做
-
-- [ ] 5 个 Agent + 2 个 Auditor 全部实现
-- [ ] 预置港综大纲（1983 年香港起步，主角背景 + 金手指 + 前 5 章节拍表）
-- [ ] `AGENTS.md` + 5 份 `rules/*.md`
-- [ ] **真实产出前 3 章**（每章 ~3000 字，总计 ~9000 字，完整走过 plan→gen→eval→fix→sum→audit）
-- [ ] Flask Web 三面板（文件树 / 当前章节+debt / Prompt Inspector）
-- [ ] `README.md` 说明怎么跑
-- [ ] 部署到公网（Vercel 或 Railway，黑客松要求公网演示）
-
-### ❌ 不做（YAGNI）
-
-- 真写 800 章
-- 用户登录/多用户
-- 数据库（全文件）
-- TimelineGuard + FactGuard（砍）
-- 流式 UI / WebSocket（polling 即可）
-- 真 Git PR 集成（用 `.patch.md` 文件模拟）
-
-### 风险 & 兜底
-
-| 风险 | 兜底 |
-|---|---|
-| DeepSeek API 波动 | `.env` 里保留 fallback OpenAI key（若用户提供） |
-| 一次跑 3 章 >10 分钟 | 提前跑一遍，成品章节 checked-in 到 `state/` 里；Web 页上的"生成"按钮只演示流水线，不阻塞 |
-| 部署不通过 | 本地 `python -m web.app` + ngrok/cloudflared 隧道 |
-| ZIP > 10MB | 删 `state/prompts_log.jsonl` 历史，只保留最近 1 章 |
-
----
-
-## 7. Setting System（v1.1 追加）
-
-原 v1.0 设计把"港综 1983"硬编码到 `rules/`、`src/agents/*.py` 与文档中。
-代码审查期间发现这违反了"通用多 Agent 团队"的初衷：架构与具体题材未分离。
-
-### 7.1 分层
+### 6.1 分层
 
 ```
 通用层（题材无关）             题材层（setting pack）
@@ -326,7 +277,7 @@ src/llm.py
 AGENTS.md
 ```
 
-### 7.2 激活流程
+### 6.2 激活流程
 
 ```
 python -m src.bootstrap --setting <name>
@@ -334,7 +285,7 @@ python -m src.bootstrap --setting <name>
 
 把 `settings/<name>/` 的 7 个文件拷贝到 `state/`。Agent 只读 `state/`，跟题材解耦。
 
-### 7.3 Agent 如何读题材内容
+### 6.3 Agent 如何读题材内容
 
 | Agent | 通用读 | 题材读 |
 |---|---|---|
@@ -346,55 +297,52 @@ python -m src.bootstrap --setting <name>
 | AISlopGuard | (AI-slop 子集内嵌在 auditor 的 prompt 里，通用) | — |
 | CharacterGuard | — | state/characters.yaml + 历史摘要 |
 
-### 7.4 切题材零代码修改
+### 6.4 切题材零代码修改
 
 ```bash
-python -m src.bootstrap --setting gangster-hk-1983    # 港综
+python -m src.bootstrap --setting gangster-hk-1983
 python -m src.pipeline --chapter 1
 # ...
-python -m src.bootstrap --setting xianxia-ascension   # 切仙侠
+python -m src.bootstrap --setting xianxia-ascension
 python -m src.pipeline --chapter 1
 ```
 
-### 7.5 内置示例
+### 6.5 内置示例
 
-| Setting | 状态 | 用途 |
-|---|---|---|
-| `gangster-hk-1983` | 完整运行过 3 章，产出在 `demo_snapshot/` | 验证 Agent 间协作 + 端到端 pitch |
-| `xianxia-ascension` | 结构完整（7 文件），未跑 LLM | 证明架构真通用 |
-
----
-
-## 8. 评委 60 秒 pitch 脚本
-
-> "这是一个多 Agent 小说写作流水线。它由 **5 个主 Agent + 2 个后台审计 Agent** 轮流工作。
->
-> **（切到 Prompt Inspector）** 看这里。每个 Agent 调用都是 fresh context，只读几个它要的文件，**不继承前一个 Agent 的思考**。这是 Anthropic 的 "Planner/Generator/Evaluator 三角" 的工程化落地。
->
-> **（切到 state/ 文件树）** 所有状态都沉在文件里。**页面刷新、进程重启、任意时刻中断——只要 `state/progress.json` 还在，就能从上一步继续**。这就是 Cognition 说的 Context Reset，不是 context compression。
->
-> **（切到 debt.jsonl）** 这是技术债。有些问题 Fixer 两次没改好，就带伤上线，写到 debt 里。后台审计员每天扫一次，找个轻的时候再修。OpenAI 在 Codex 项目里就是这么干的。
->
-> **（切到 Lessons Map Tab）** 架构不是凭空来的——这里是 5 条 agent 搭建难题与代码落点的对应。每个指针点进去是 GitHub 上的真实行号。
->
-> **（切题材）** 整个架构对题材一无所知。`settings/gangster-hk-1983/` 是港综示例，`settings/xianxia-ascension/` 是仙侠示例。切题材只需 `bootstrap --setting <name>`，不改代码。
->
-> 代码 2000 行出头，没用任何 Agent 框架。"
+| Setting | 状态 |
+|---|---|
+| `gangster-hk-1983` | 完整运行过 3 章，产出在 `demo_snapshot/` |
+| `xianxia-ascension` | 完整运行过 3 章，产出在 `demo_snapshot_xianxia/` |
 
 ---
 
-## 9. 交付清单
+## 7. Web UI（`web/` + `docs/`）
 
-- [x] 本设计文档（v1.1，已提交 git）
-- [x] GitHub 公开仓库：https://github.com/CalWade/blackboard-novel-pipeline
-- [x] 公网静态演示：https://calwade.github.io/blackboard-novel-pipeline/
-- [x] 完整 3 章产出（demo_snapshot/），Prompt Inspector 37 次调用可查
-- [x] 2 个 Setting 示例（港综完整跑过；仙侠结构完整）
-- [x] 代码 ZIP ≤ 10MB
-- [x] EasyClaw 平台报名表提交
+系统提供两套 UI，共享大部分组件：
+
+- **`web/` · Flask 动态版**：读本地实时 `state/`，轮询刷新。按钮触发 `POST /api/run` 调用 pipeline，LLM 实时跑。需要本地 Python 环境 + API Key。
+- **`docs/` · 静态只读版**：纯 HTML/CSS/JS，GitHub Pages 托管。数据从 `demo_snapshot/` 与 `demo_snapshot_xianxia/` 加载。操作按钮永久 disabled。供公网评估查阅。
+
+两套 UI 的**三面板结构一致**：
+
+- **左**：`state/` 文件树，点击跳到中间面板
+- **中**：章节 Markdown / Debt 表格 / Rules 浏览
+- **右**：`Prompt Inspector`（LLM 调用时间线，关键）/ `Log`（密集流水日志）/ `Lessons`（5 大难题 ↔ 代码指针 crosswalk）
+
+关键 UI 功能由架构诉求反推：Prompt Inspector 是"每次调用 fresh context"的可视证据；文件树 + 状态 pill 是"状态外化到文件"的可视证据；Debt Tab 是 Lesson 4 "带债上线"的可视产物。
+
+---
+
+## 演进状态与路线图
+
+本文档描述**架构骨架**。从 3 章 MVP 到"大而全通用系统"的 gap 清单、优先级、工时估算与第一周行动项，见：
+
+- [`docs/gap-analysis-post-mvp.md`](../../gap-analysis-post-mvp.md) —— 第三轮 Oracle 评审。MoSCoW 清单：9 Must / 18 Should / 4 Could / 7 Won't，总工时约 155h。
+- [`docs/tutorial-borrowings-audit.md`](../../tutorial-borrowings-audit.md) —— 教程贴 108 条 ↔ 系统落点的逐条审计。
 
 ---
 
 **文档版本历史**：
-- v1.0（2026-05-09）—— 初始架构评审 by Oracle subagent，采纳 3 条修改（加 Summarizer / 砍 Auditor 4→2 / 加 Prompt Inspector UI）
-- v1.1（2026-05-09 晚）—— Oracle 后评审发现 Evaluator skeleton 伪通过；同时发现架构与题材未分离。重构：抽 `settings/` 系统，加 `xianxia-ascension` 证明通用性；Evaluator 加 skeleton detector；AISlopGuard 改写质量收紧；UI 加 Lessons Map 面板。
+- 初版（2026-05-09）—— 架构评审 by Oracle subagent。采纳 3 条修改：独立 Summarizer、Auditor 从 4 砍到 2、加 Prompt Inspector UI。
+- 重构（2026-05-09）—— Oracle 后评审发现架构与题材未分离。抽 `settings/` 系统，加 `xianxia-ascension` 作为第二示例；Evaluator 加 skeleton detector；AISlopGuard 改写质量收紧；UI 加 Lessons Map 面板。
+- 精简（2026-05-10）—— 清理 MVP 交付话术与黑客松 pitch 章节，以符合"通用系统"定位。演进路线外移到 `docs/gap-analysis-post-mvp.md`。
