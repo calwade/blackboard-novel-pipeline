@@ -38,6 +38,14 @@ class Generator(BaseAgent):
         writing_style_extra = bb.read_text("writing-style-extra.md")
         era = bb.read_text("era.md")
 
+        # Chapter-type-specific emphasis (skill #12)
+        chapter_type = plan.get("chapter_type", "")
+        chapter_type_block = _chapter_type_emphasis(chapter_type)
+
+        # Writing self-check (A-5, Planner-authored risk scan). Skill #14.
+        self_check = plan.get("writing_self_check", {}) or {}
+        self_check_block = _format_self_check(self_check)
+
         inputs_read = [
             f"state/{plan_path}",
             "state/characters.yaml",
@@ -127,6 +135,12 @@ class Generator(BaseAgent):
             f"\n"
             f"如果任何一个问题答不上来，先补动机链或找 Planner 重改节拍表，再写正文。\n"
             f"\n"
+            f"# 本章类型：{chapter_type or '未指定'}\n\n"
+            f"{chapter_type_block}\n"
+            f"\n"
+            f"# 写作自检（Planner 标注的风险扫描 —— 本章必须主动规避）\n\n"
+            f"{self_check_block}\n"
+            f"\n"
             f"# 通用写作风格规范\n\n"
             + writing_style_core
             + f"\n\n# 题材特有风格补充（由 setting 注入）\n\n"
@@ -174,3 +188,82 @@ def _extract_relevant_characters(characters: dict, names: set[str]) -> str:
         out = characters
 
     return yaml.safe_dump(out, allow_unicode=True, sort_keys=False, default_flow_style=False)
+
+
+def _chapter_type_emphasis(chapter_type: str) -> str:
+    """Return per-chapter-type writing emphasis.
+
+    Source: skill #12 — chapter types must be written with different
+    intensity. A 过渡 chapter written like a 战斗 chapter = pacing failure.
+    """
+    table = {
+        "战斗": (
+            "这是**战斗章**。核心是正面冲突。\n"
+            "- 强调画面感：具体动作（谁出手、击中了哪里、谁挡住了）> 形容词堆砌\n"
+            "- 强调受力与代价：每一次交锋都要有**可量化的损失**（伤势位置、武器损耗、内力消耗、筹码变化）\n"
+            "- 强调节奏：短句与长句交替，动作密集段段落要短（1-3 行）\n"
+            "- 结尾必须给出**谁赢了什么 / 输了什么**——不是『终于打完了』的模糊感\n"
+            "- 禁止：群像『全场震惊』、抽象『一股巨力涌来』、数据模糊『实力暴涨』\n"
+        ),
+        "布局": (
+            "这是**布局章**。核心是暗流、试探、信息交换。\n"
+            "- 强调对话层次：每句台词都要推进**立场 / 情报 / 关系**中的一项\n"
+            "- 强调信息差：清楚标注谁知道什么、谁误判什么、谁在诈谁（可在心理独白或暗示中体现）\n"
+            "- 强调场景张力：不需要动手，但空气要紧——一个手势、一杯茶、一个眼神都有分量\n"
+            "- 结尾必须让读者意识到：**局已经铺开**，下一章某个点会触发连锁\n"
+            "- 禁止：对话变成信息倾倒（某角色一口气讲完所有背景）\n"
+        ),
+        "过渡": (
+            "这是**过渡章**。核心是状态变化与钩子。\n"
+            "- 节奏较缓但**不得无推进**：位置 / 时间 / 心态 / 身份中至少一项要发生变化\n"
+            "- 强调钩子：开篇钩子承上，章末钩子必须**诱导读者进入下一章**\n"
+            "- 篇幅可以略短，但场景不得超过 3 个，避免散乱\n"
+            "- 可安排轻度插曲：回忆、伏笔暗示、配角闲谈推进世界观\n"
+            "- 禁止：拖稿（整章都是走路 / 吃饭 / 回忆）、无冲突的风景文\n"
+        ),
+        "回收": (
+            "这是**回收章**。核心是兑现前文伏笔、结算旧账。\n"
+            "- 强调满足感：被伏笔吊了 N 章的读者**此刻等着这一幕**，不要稀释情绪\n"
+            "- 必须明确标注回收了哪些 hook_id（在状态卡的活跃伏笔表中删除对应行）\n"
+            "- 回收方式要有**意外性**：不是直接兑现读者预期，而是在预期之上多转一层（例：敌人回来了但不是来复仇，是来求救）\n"
+            "- 结尾必须**顺势开新循环**：老债已清，下一笔新债已下意识埋下\n"
+            "- 禁止：回收过于敷衍（一句话带过）、回收后无后续钩子\n"
+        ),
+    }
+    return table.get(
+        chapter_type,
+        "（Planner 未指定章节类型——按默认节奏写，但必须在每个 scene 的 `advances` 字段\n"
+        "中说明本场景推进了信息 / 地位 / 资源 / 伤亡 / 仇恨 / 境界 中的哪一项。）",
+    )
+
+
+def _format_self_check(self_check: dict) -> str:
+    """Render Planner's writing_self_check into a Markdown table for Generator.
+
+    Source: skill #14 (A-5 reopened) — the Planner-authored risk scan table.
+    Each non-empty, non-"无" entry becomes a concrete constraint Generator
+    must work around when writing prose.
+    """
+    label_map = {
+        "ooc_risk": "人物 OOC 风险",
+        "info_leak_risk": "反派/配角信息越界风险",
+        "setting_conflict_risk": "世界观/时代冲突风险",
+        "power_scaling_risk": "战力/资源跳数量级风险",
+        "pacing_risk": "节奏拖沓或爽点后置风险",
+        "vocab_fatigue_risk": "高疲劳词风险",
+    }
+    if not self_check:
+        return (
+            "（Planner 未提供 writing_self_check。按通用铁律自律：OOC / 信息越界 / "
+            "战力跳级 / 拖稿 / 疲劳词 五项自查。）"
+        )
+
+    lines = ["| 检查项 | Planner 提示 |", "|---|---|"]
+    for key, label in label_map.items():
+        val = self_check.get(key, "").strip() if isinstance(self_check.get(key), str) else ""
+        if not val:
+            val = "（未填写，按通用铁律自律）"
+        lines.append(f"| {label} | {val} |")
+    lines.append("")
+    lines.append("**写作原则**：以上任何**非『无』**的提示，都必须在本章正文中显式规避。")
+    return "\n".join(lines)
