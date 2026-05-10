@@ -649,20 +649,31 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 **判定**：**Must**。
 
-**理由**：
-- 上一轮评审抓到 Evaluator 在 ch1/ch3 false-pass（返回 skeleton）。这不是单发故障，是"没人评 Evaluator"。
-- 解决方案：构造 **金标准集**——30 个已知"有明确雷点"的短样本（每样本约 500 字），跑 Evaluator，看命中率是否 ≥ 90%。低于阈值报警。
-- 这是唯一能让"完美效果"有定义的机制。没有这个，所有关于"Evaluator 有没有做好"的讨论都是拍脑袋。
+**✅ 已落地（2026-05，初版 10 case）** — 详见 [`docs/c10-evaluator-calibration-report.md`](c10-evaluator-calibration-report.md)
 
-**具体形态**：
-- 新目录：`tests/evaluator_calibration/`
-- 新格式：每个测试 `case_NNN.yaml`：含 `text`（样本正文）+ `expected_hits: [landmine_10, landmine_13]`
-- 新脚本：`tools/calibrate_evaluator.py`（跑所有 case，输出准确率/召回率/F1）
-- 产出：`docs/evaluator-calibration-report.md`
+**实际落点**：
+- `evaluator_calibration/cases/*.yaml` — 10 个测试 case（2 clean + 8 各植入 1-2 个 landmine）
+- `src/tools/calibrate_evaluator.py` — 批量跑 + 混淆矩阵计算
+- `evaluator_calibration/reports/` — 每次跑自动产出 JSON + Markdown 报告
+- CLI: `python -m src.tools.calibrate_evaluator --concurrency 5`（90s 跑完 10 case）
 
-**工作量**：初版（10 个 case）：4h；完整版（30 个 case）：10h
+**首轮基线数据（commit `c061b95` 时的 Evaluator 状态）**：
+- **overall_pass 一致性 70%**（目标 ≥80% · 不及格）
+- **召回 62.5%**（37.5% 植入雷被漏判）
+- **精度 41.3%**（命中扩散问题）
 
-**判定**：**Must**，至少要 10 个 case 初版。
+**关键发现**：
+- ✅ 干净稿 100% 放行（Evaluator 不冤枉好稿）
+- 🔴 **3 类问题漏判严重**：timeline_drift（landmine_13）/ rushed-pacing（landmine_8+15）/ POV-jumping（landmine_4+9）
+- ⚠️ **命中扩散偏差**：见坏稿会连锁命中更多不相关 landmine（精度偏低的主因）
+- **推论**：C-5 的 "10/10 0 hits" 数据可能混有 1-2 个漏判的真问题
+
+**下一轮升级方向**（未来 C-10+）：
+- 扩 case 到 2000+ 字（更贴近真实章节长度）
+- 靶向强化 landmine_4/8/9/13/15 判据
+- 考虑 Evaluator 二次采样（两次 0-temp 投票降低漏判）
+
+**工作量**：初版 10 case **已完成**（实际 3h）；完整版 30 case 暂不做（见 report 结论）
 
 ---
 

@@ -1,0 +1,310 @@
+{
+  "results": [
+    {
+      "case_id": "case-01-clean-pass-gangster",
+      "setting": "gangster-hk-1983",
+      "source_file": "case-01-clean-pass-gangster.yaml",
+      "duration_s": 18.3,
+      "actual_pass": true,
+      "expected_pass": true,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {},
+      "expected_hits": {},
+      "true_positives": [],
+      "false_negatives": [],
+      "false_positives": [],
+      "severity_mismatches": [],
+      "recall": null,
+      "precision": null,
+      "chapter_chars": 486
+    },
+    {
+      "case_id": "case-02-clean-pass-xianxia",
+      "setting": "xianxia-ascension",
+      "source_file": "case-02-clean-pass-xianxia.yaml",
+      "duration_s": 18.3,
+      "actual_pass": true,
+      "expected_pass": true,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {},
+      "expected_hits": {},
+      "true_positives": [],
+      "false_negatives": [],
+      "false_positives": [],
+      "severity_mismatches": [],
+      "recall": null,
+      "precision": null,
+      "chapter_chars": 596
+    },
+    {
+      "case_id": "case-03-ai-slop-heavy",
+      "setting": "gangster-hk-1983",
+      "source_file": "case-03-ai-slop-heavy.yaml",
+      "duration_s": 93.3,
+      "actual_pass": false,
+      "expected_pass": false,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {
+        "landmine_1": "high",
+        "landmine_5": "high",
+        "landmine_6": "medium",
+        "landmine_7": "high",
+        "landmine_8": "high",
+        "landmine_9": "medium",
+        "landmine_10": "high",
+        "landmine_11": "high",
+        "landmine_12": "high",
+        "landmine_15": "high",
+        "landmine_17": "medium",
+        "landmine_18": "high"
+      },
+      "expected_hits": {
+        "landmine_18": "high"
+      },
+      "true_positives": [
+        "landmine_18"
+      ],
+      "false_negatives": [],
+      "false_positives": [
+        "landmine_1",
+        "landmine_10",
+        "landmine_11",
+        "landmine_12",
+        "landmine_15",
+        "landmine_17",
+        "landmine_5",
+        "landmine_6",
+        "landmine_7",
+        "landmine_8",
+        "landmine_9"
+      ],
+      "severity_mismatches": [],
+      "recall": 1.0,
+      "precision": 0.08333333333333333,
+      "chapter_chars": 427
+    },
+    {
+      "case_id": "case-04-character-ooc",
+      "setting": "gangster-hk-1983",
+      "source_file": "case-04-character-ooc.yaml",
+      "duration_s": 26.4,
+      "actual_pass": false,
+      "expected_pass": false,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {
+        "landmine_10": "high"
+      },
+      "expected_hits": {
+        "landmine_10": "high"
+      },
+      "true_positives": [
+        "landmine_10"
+      ],
+      "false_negatives": [],
+      "false_positives": [],
+      "severity_mismatches": [],
+      "recall": 1.0,
+      "precision": 1.0,
+      "chapter_chars": 654
+    },
+    {
+      "case_id": "case-05-timeline-drift",
+      "setting": "gangster-hk-1983",
+      "source_file": "case-05-timeline-drift.yaml",
+      "duration_s": 19.3,
+      "actual_pass": true,
+      "expected_pass": false,
+      "pass_agreement": false,
+      "skeleton_detected": false,
+      "actual_hits": {},
+      "expected_hits": {
+        "landmine_13": "high"
+      },
+      "true_positives": [],
+      "false_negatives": [
+        "landmine_13"
+      ],
+      "false_positives": [],
+      "severity_mismatches": [],
+      "recall": 0.0,
+      "precision": null,
+      "chapter_chars": 624
+    },
+    {
+      "case_id": "case-06-landmine-cascade-two-medium",
+      "setting": "gangster-hk-1983",
+      "source_file": "case-06-landmine-cascade-two-medium.yaml",
+      "duration_s": 17.9,
+      "actual_pass": true,
+      "expected_pass": false,
+      "pass_agreement": false,
+      "skeleton_detected": false,
+      "actual_hits": {},
+      "expected_hits": {
+        "landmine_4": "medium",
+        "landmine_9": "medium"
+      },
+      "true_positives": [],
+      "false_negatives": [
+        "landmine_4",
+        "landmine_9"
+      ],
+      "false_positives": [],
+      "severity_mismatches": [],
+      "recall": 0.0,
+      "precision": null,
+      "chapter_chars": 384
+    },
+    {
+      "case_id": "case-07-show-dont-tell-violation",
+      "setting": "xianxia-ascension",
+      "source_file": "case-07-show-dont-tell-violation.yaml",
+      "duration_s": 34.9,
+      "actual_pass": false,
+      "expected_pass": false,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {
+        "landmine_1": "medium",
+        "landmine_10": "high",
+        "landmine_12": "medium",
+        "landmine_18": "high"
+      },
+      "expected_hits": {
+        "landmine_12": "high"
+      },
+      "true_positives": [
+        "landmine_12"
+      ],
+      "false_negatives": [],
+      "false_positives": [
+        "landmine_1",
+        "landmine_10",
+        "landmine_18"
+      ],
+      "severity_mismatches": [
+        {
+          "landmine": "landmine_12",
+          "expected": "high",
+          "actual": "medium"
+        }
+      ],
+      "recall": 1.0,
+      "precision": 0.25,
+      "chapter_chars": 511
+    },
+    {
+      "case_id": "case-08-god-mode-system",
+      "setting": "xianxia-ascension",
+      "source_file": "case-08-god-mode-system.yaml",
+      "duration_s": 31.2,
+      "actual_pass": false,
+      "expected_pass": false,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {
+        "landmine_10": "high",
+        "landmine_13": "high",
+        "landmine_14": "high"
+      },
+      "expected_hits": {
+        "landmine_14": "high"
+      },
+      "true_positives": [
+        "landmine_14"
+      ],
+      "false_negatives": [],
+      "false_positives": [
+        "landmine_10",
+        "landmine_13"
+      ],
+      "severity_mismatches": [],
+      "recall": 1.0,
+      "precision": 0.3333333333333333,
+      "chapter_chars": 613
+    },
+    {
+      "case_id": "case-09-pacing-rushed-climax",
+      "setting": "gangster-hk-1983",
+      "source_file": "case-09-pacing-rushed-climax.yaml",
+      "duration_s": 18.1,
+      "actual_pass": true,
+      "expected_pass": false,
+      "pass_agreement": false,
+      "skeleton_detected": false,
+      "actual_hits": {},
+      "expected_hits": {
+        "landmine_8": "medium",
+        "landmine_15": "medium"
+      },
+      "true_positives": [],
+      "false_negatives": [
+        "landmine_15",
+        "landmine_8"
+      ],
+      "false_positives": [],
+      "severity_mismatches": [],
+      "recall": 0.0,
+      "precision": null,
+      "chapter_chars": 593
+    },
+    {
+      "case_id": "case-10-adjective-stacking-purple-prose",
+      "setting": "xianxia-ascension",
+      "source_file": "case-10-adjective-stacking-purple-prose.yaml",
+      "duration_s": 50.9,
+      "actual_pass": false,
+      "expected_pass": false,
+      "pass_agreement": true,
+      "skeleton_detected": false,
+      "actual_hits": {
+        "landmine_1": "high",
+        "landmine_6": "high",
+        "landmine_12": "high",
+        "landmine_17": "high",
+        "landmine_18": "high"
+      },
+      "expected_hits": {
+        "landmine_18": "medium",
+        "landmine_6": "medium"
+      },
+      "true_positives": [
+        "landmine_18",
+        "landmine_6"
+      ],
+      "false_negatives": [],
+      "false_positives": [
+        "landmine_1",
+        "landmine_12",
+        "landmine_17"
+      ],
+      "severity_mismatches": [
+        {
+          "landmine": "landmine_6",
+          "expected": "medium",
+          "actual": "high"
+        },
+        {
+          "landmine": "landmine_18",
+          "expected": "medium",
+          "actual": "high"
+        }
+      ],
+      "recall": 1.0,
+      "precision": 0.4,
+      "chapter_chars": 444
+    }
+  ],
+  "totals": {
+    "pass_agreement_count": 7,
+    "pass_agreement_rate": 0.7,
+    "recall_avg": 0.625,
+    "precision_avg": 0.4133333333333333,
+    "skeleton_count": 0,
+    "total_duration_s": 93.3
+  }
+}
