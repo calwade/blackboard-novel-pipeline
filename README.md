@@ -59,6 +59,9 @@ Evaluator:  半 Debate — 对抗人设 + 结构化 JSON rubric + skeleton detec
 | **ResourceLedger**（可选） | resource_schema.yaml + chNNN.md + 上一版 ledger | `resource_ledger.md`（覆盖式） | 0.2 |
 | **AISlopGuard** | chNNN.md | `fixes/chNNN.slop-patch.md` | 0.2 |
 | **CharacterGuard** | chNNN.md + characters.yaml + 历史摘要 | `fixes/chNNN.char-patch.md` | 0.2 |
+| **FactChecker**（A-1，按需） | chNNN.md + verdict.json + era.md | `fixes/chNNN.fact-patch.md` | 0.0 |
+
+> FactChecker 只在 Evaluator 命中 `landmine_13`（世界观模糊/脱离现实）且 severity ∈ {medium, high} 时触发。调用 Perplexity Sonar 查 ≤3 个可查证断言，产出建议性补丁（不改 verdict）。未配置 `PERPLEXITY_API_KEY` 时优雅降级。
 
 ---
 

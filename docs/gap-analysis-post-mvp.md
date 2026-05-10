@@ -54,16 +54,42 @@
 
 **当时砍的原因**：爬取不可靠、延迟高、海外访问香港资料困难、成本不可控。
 
-**新前提下决议**：**部分采纳**。但不是重新做 TimelineGuard/FactGuard 这种"每章全量爬网"的重型方案——那样 3 章 × 4 auditors × 多查询 = 几十次爬取，依然不稳。
+**✅ 已落地（2026-05）** · 按 skill-borrowings-plan.md 的修订方案：
 
-**正确形态**：给 Generator 和 Evaluator 加**按需 tool-call 能力**，而不是独立 Agent。
+最终形态与原计划有两点不同：
+1. **不是 Generator 主动触发**（Generator 仍无网），而是**独立的 FactChecker 审计员**
+2. **每章至多 3 次搜索**（由 Planner 抽的可查证断言上限决定），不是 Generator 每段一次
 
-**具体怎么补**：
+**实际实现**（见 commits `ebf49dd+`）：
 
-1. 在 `src/llm.py` 之外加 `src/tools/websearch.py`，封装一个简单 HTTP 搜索 API（推荐 Tavily / Serper / Bing API，非爬虫），超时 10s，失败即 fallback 不阻塞。
-2. Generator 的 system prompt 加一段："如果本章需要具体历史/专业数据（如 AK47 射速、1987 港股点位），且 state/era.md 中没有，输出 `<<SEARCH: 查询词>>` 标记，我会替你补齐。"
-3. Pipeline 在 Generator 产出后扫描 `<<SEARCH:>>`，最多执行 3 次搜索，结果注入后让 Generator 再写一遍那段（小范围 regen，不是全章）。
-4. Evaluator 的交叉核查在命中 landmine_13（世界观模糊）时，如果 evidence 是具体数据，触发一次搜索验证，结果写进 verdict 的 `external_checks` 字段。
+- `src/tools/websearch.py` — Perplexity Sonar OpenAI-compat 客户端
+  - 端点 `https://work-api-srv.easyclaw.cn/api/v1/search/chat/completions`
+  - 文件缓存（md5(query+model) → state/websearch_cache/\*.json）
+  - state/websearch_log.jsonl 记录每次调用（Inspector 可见）
+  - `WebSearchUnavailable` 异常：未配置 API key 或网络错误时抛出，调用方优雅降级
+
+- `src/auditors/fact_checker.py` — 第三个 auditor（和 AISlopGuard/CharacterGuard 平行）
+  - **触发条件**（`should_run()`）：Evaluator 写入的 verdict.json 中 `landmine_13.hit=true` 且 severity ∈ {medium, high}
+  - **流程**：读 chNNN.md + verdict.json 的 landmine_13 evidence + era.md → LLM 抽 0-3 条可查证断言 → 每条 1 次 Perplexity 查询 → 合并为 `state/fixes/chNNN.fact-patch.md`
+  - **Lesson-3 边界**：不读 plan/issues/summaries；不改 verdict；不作 pass/fail 门，纯建议性补丁
+
+- `src/pipeline.py` — audit fan-out 条件加入 FactChecker
+  - `--audit-only N` 也会按 should_run 自动包含
+
+**配置**（`.env`）：
+```
+PERPLEXITY_API_KEY=dc-sk-...
+PERPLEXITY_BASE_URL=https://work-api-srv.easyclaw.cn/api/v1/search
+PERPLEXITY_MODEL=perplexity/sonar-pro
+```
+留空则 FactChecker 优雅降级（写一份"未配置"占位 patch，不影响其他 agent）。
+
+**测试**：`tests/test_fact_checker.py` · 26 个 pytest 用例
+- websearch 缓存 / 降级 / HTTP 错误 / 网络错误
+- should_run 对各种 verdict 状态（未命中/low/medium/high/坏 JSON）
+- FactChecker prompt 构建（含/不含 era.md）
+- handle_output 5 个分支（无 claims / 无 API / 解析失败 / 正常 / ≤3 claims 封顶）
+- pipeline 集成（landmine_13 未命中 → 跳过；medium 命中 → 加入 fan-out）
 
 **为什么不做独立 FactGuard Agent**：独立 Agent 就要完整读一章 + 抽所有事实去查，80% 查到的都是已经对的。tool-call 模式只在"作者需要/评审怀疑"时触发，信噪比高得多。
 

@@ -69,9 +69,12 @@ python -m src.pipeline --chapter 1
 | `state/summaries/chNNN.md` | 第 N 章摘要 | Summarizer（独立会话） |
 | `state/fixes/chNNN.slop-patch.md` | AI 味审计产物 | AISlopGuard |
 | `state/fixes/chNNN.char-patch.md` | 人设审计产物 | CharacterGuard |
+| `state/fixes/chNNN.fact-patch.md` | 事实核查补丁（**仅当** Evaluator 命中 landmine_13·medium+ 且配置了 Perplexity） | FactChecker（A-1，按需触发） |
 | `state/issues.jsonl` | 待修问题日志 | Evaluator 追加 |
 | `state/debt.jsonl` | 带伤上线的技术债 | Pipeline（2 次 retry 仍不过） |
 | `state/prompts_log.jsonl` | 每次 LLM 调用的完整记录 | llm.chat() 自动写入 |
+| `state/websearch_log.jsonl` | 每次 Perplexity 查询的完整记录（query + latency + 引用数） | websearch.search() 自动写入 |
+| `state/websearch_cache/*.json` | Perplexity 查询结果缓存（md5 键） | websearch.search() 自动写入 |
 | `state/packaging.json` | 出版包装产物（书名/简介/封面/标签） | PackagingAgent（独立运行 `--packaging`） |
 
 ## Agent 名册
@@ -88,6 +91,7 @@ python -m src.pipeline --chapter 1
 | **ResourceLedger**（可选） | resource_schema.yaml + chNNN.md + 上一版 resource_ledger.md | **resource_ledger.md**（覆盖式） | 0.2 | 仅在 setting 提供 resource_schema.yaml 时运行；监控资源跳数量级 |
 | AISlopGuard | chNNN.md + 摘取 AI 味条目 | fixes/chNNN.slop-patch.md | 0.2 | 只报 AI 味相关（moderate/severe） |
 | CharacterGuard | chNNN.md + characters.yaml + 历史 summaries | fixes/chNNN.char-patch.md | 0.2 | 只报人设偏移 |
+| **FactChecker**（A-1，按需） | chNNN.md + verdict.json（读 landmine_13 evidence）+ era.md | fixes/chNNN.fact-patch.md | 0.0 | 独立事实核查；调 Perplexity Sonar ≤3 次/章；仅在 landmine_13·medium+ 时触发 |
 | PackagingAgent | setting.yaml + outline.json + characters.yaml + era.md + ch001.md + 最后章节 | packaging.json | 0.6 | 书名/简介/封面/标签包装，独立运行 `--packaging` |
 
 ## 规则索引（Progressive Disclosure）

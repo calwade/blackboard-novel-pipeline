@@ -43,6 +43,7 @@ from .agents.multi_level_summarizer import (
 )
 from .auditors.ai_slop_guard import AISlopGuard
 from .auditors.character_guard import CharacterGuard
+from .auditors.fact_checker import FactChecker, should_run as fact_checker_should_run
 from .blackboard import Blackboard
 
 MAX_FIXER_RETRIES = 2
@@ -164,16 +165,26 @@ def run_chapter(bb: Blackboard, chapter: int) -> dict:
     if is_volume_boundary(chapter):
         _stage("book_summarize", lambda: BookSummarizer().run(bb, chapter=chapter))
 
-    # 5. Fan-out Auditors in parallel threads
+    # 5. Fan-out Auditors in parallel threads.
+    # AISlopGuard + CharacterGuard run every chapter.
+    # FactChecker (A-1) runs ONLY when Evaluator hit landmine_13 with
+    # moderate-or-high severity AND Perplexity is configured — see
+    # src/auditors/fact_checker.py::should_run. Skips silently otherwise.
     def _run_auditor(AuditorClass):
         AuditorClass().run(bb, chapter=chapter)
 
     _update_in_flight(bb, chapter, "audit_fanout")
     t0 = time.time()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+    auditor_slots: dict[str, type] = {
+        "ai_slop_guard": AISlopGuard,
+        "character_guard": CharacterGuard,
+    }
+    if fact_checker_should_run(bb, chapter):
+        auditor_slots["fact_checker"] = FactChecker
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(auditor_slots)) as ex:
         futures = {
-            ex.submit(_run_auditor, AISlopGuard): "ai_slop_guard",
-            ex.submit(_run_auditor, CharacterGuard): "character_guard",
+            ex.submit(_run_auditor, cls): name for name, cls in auditor_slots.items()
         }
         results = {}
         for fut, nm in list(futures.items()):
@@ -208,12 +219,28 @@ def run_chapter(bb: Blackboard, chapter: int) -> dict:
 
 
 def run_audit_only(bb: Blackboard, chapter: int) -> dict:
-    """Re-run the two auditors on an existing chapter. Useful for demos."""
+    """Re-run the auditors on an existing chapter. Useful for demos.
+
+    FactChecker fires only when the existing verdict.json has a
+    landmine_13 hit at moderate+ severity AND Perplexity is configured.
+    """
     t0 = time.time()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-        ex.submit(AISlopGuard().run, bb, chapter=chapter).result()
-        ex.submit(CharacterGuard().run, bb, chapter=chapter).result()
-    return {"chapter": chapter, "audit_duration_s": round(time.time() - t0, 1)}
+    auditor_tasks = [
+        (AISlopGuard, "ai_slop_guard"),
+        (CharacterGuard, "character_guard"),
+    ]
+    if fact_checker_should_run(bb, chapter):
+        auditor_tasks.append((FactChecker, "fact_checker"))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(auditor_tasks)) as ex:
+        futs = [ex.submit(cls().run, bb, chapter=chapter) for cls, _ in auditor_tasks]
+        for f in futs:
+            f.result()
+    return {
+        "chapter": chapter,
+        "audit_duration_s": round(time.time() - t0, 1),
+        "auditors_run": [name for _, name in auditor_tasks],
+    }
 
 
 # -------------------------------------------------------------------------

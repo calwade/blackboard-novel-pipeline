@@ -17,6 +17,15 @@ LLM_BASE_URL: str = os.environ.get(
 ).rstrip("/")
 LLM_MODEL: str = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
 
+# Optional Perplexity web-search (A-1). When absent, FactChecker skips
+# gracefully; Evaluator is unaffected. OpenAI-compatible chat/completions
+# shape — see src/tools/websearch.py.
+PERPLEXITY_API_KEY: str = os.environ.get("PERPLEXITY_API_KEY", "")
+PERPLEXITY_BASE_URL: str = os.environ.get(
+    "PERPLEXITY_BASE_URL", "https://work-api-srv.easyclaw.cn/api/v1/search"
+).rstrip("/")
+PERPLEXITY_MODEL: str = os.environ.get("PERPLEXITY_MODEL", "perplexity/sonar-pro")
+
 # Paths (all relative to project root)
 PROJECT_ROOT: Path = _PROJECT_ROOT
 
