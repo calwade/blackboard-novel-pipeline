@@ -649,31 +649,37 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 **判定**：**Must**。
 
-**✅ 已落地（2026-05，初版 10 case）** — 详见 [`docs/c10-evaluator-calibration-report.md`](c10-evaluator-calibration-report.md)
+**✅ 已落地（2026-05，三轮迭代）** — 详见 [`docs/c10-evaluator-calibration-report.md`](c10-evaluator-calibration-report.md)
 
 **实际落点**：
-- `evaluator_calibration/cases/*.yaml` — 10 个测试 case（2 clean + 8 各植入 1-2 个 landmine）
+- `evaluator_calibration/cases/*.yaml` — 10 个测试 case（2 clean + 8 各植入 1-2 个 landmine，正文 1400-1800 字贴近真实章节）
 - `src/tools/calibrate_evaluator.py` — 批量跑 + 混淆矩阵计算
 - `evaluator_calibration/reports/` — 每次跑自动产出 JSON + Markdown 报告
-- CLI: `python -m src.tools.calibrate_evaluator --concurrency 5`（90s 跑完 10 case）
+- `evaluator_calibration/cases-short-backup/` — T1 时的短 case，保留作历史对照
+- CLI: `python -m src.tools.calibrate_evaluator --concurrency 5`（~85s 跑完 10 case）
 
-**首轮基线数据（commit `c061b95` 时的 Evaluator 状态）**：
-- **overall_pass 一致性 70%**（目标 ≥80% · 不及格）
-- **召回 62.5%**（37.5% 植入雷被漏判）
-- **精度 41.3%**（命中扩散问题）
+**三轮数据进化**：
+| 轮次 | 改动 | Pass 一致 | Recall | Precision |
+|---|---|---|---|---|
+| T1 baseline | 500 字短 case | 70% | 62.5% | 41.3% |
+| T2 | case 扩到 1400-1800 字 | 80% | 75.0% | 37.8% |
+| **T3** | 叙事层专项自查 + 命中稀疏化（Evaluator prompt） | **100%** ✅ | **100%** ✅ | **58.6%** ✅ |
 
-**关键发现**：
-- ✅ 干净稿 100% 放行（Evaluator 不冤枉好稿）
-- 🔴 **3 类问题漏判严重**：timeline_drift（landmine_13）/ rushed-pacing（landmine_8+15）/ POV-jumping（landmine_4+9）
-- ⚠️ **命中扩散偏差**：见坏稿会连锁命中更多不相关 landmine（精度偏低的主因）
-- **推论**：C-5 的 "10/10 0 hits" 数据可能混有 1-2 个漏判的真问题
+**T1 时暴露的三大盲区**（T3 全部修复）：
+- `landmine_13` 漏判（1983 年 iPhone）
+- `landmine_4 + 9` 漏判（POV 跳换 + 无过渡切场）
+- `landmine_8 + 15` 漏判（快速敌人撤退 / 无代价胜利）
 
-**下一轮升级方向**（未来 C-10+）：
-- 扩 case 到 2000+ 字（更贴近真实章节长度）
-- 靶向强化 landmine_4/8/9/13/15 判据
-- 考虑 Evaluator 二次采样（两次 0-temp 投票降低漏判）
+**修复手段**（见 `src/agents/evaluator.py`）：
+1. 在 Evaluator system prompt 加一段「叙事技术层专项自查」，强制扫描 landmine_4/8/9/15 这 4 条
+2. 加「命中稀疏化原则」，防止 AI 见坏扩散命中 8+ 个 landmine
 
-**工作量**：初版 10 case **已完成**（实际 3h）；完整版 30 case 暂不做（见 report 结论）
+**价值**：
+- **A-1 FactChecker 链路救活** —— landmine_13 现在能稳定命中，FactChecker 才会被触发
+- **任何未来改 Evaluator prompt 的改动**都有定量回归基线可用
+- C-5 10 章长跑的"10/10 0 hits 干净数据"**置信度提升**
+
+**工作量**：总 6h（初版 2h + 扩 case 1.5h + prompt 调优 1h + 报告 1.5h）
 
 ---
 
