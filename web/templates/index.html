@@ -12,6 +12,18 @@
 <script src="{{ url_for('static', filename='main.js') }}" defer></script>
 </head>
 <body>
+
+<!-- Loading overlay — shown on first paint, hidden by init() after state loads. -->
+<div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite" aria-busy="true">
+  <div class="loading-card">
+    <div class="loading-mark" aria-hidden="true">◐</div>
+    <div class="loading-title">Novelforge</div>
+    <div class="loading-sub">小说锻造厂 · 多 Agent 长链路流水线</div>
+    <div class="loading-bar" aria-hidden="true"><div class="loading-bar-fill"></div></div>
+    <div class="loading-phase" id="loading-phase">正在加载状态…</div>
+  </div>
+</div>
+
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark">◐</span>

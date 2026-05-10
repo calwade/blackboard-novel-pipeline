@@ -271,7 +271,7 @@ function renderBrandSub() {
   const parts = [];
   if (novel.title) parts.push(novel.title);
   if (novel.subtitle) parts.push(novel.subtitle);
-  parts.push('多智能体小说写作流水线');
+  parts.push('小说锻造厂');
   elBrand.textContent = parts.join(' · ');
 
   if (novel.title) {
@@ -829,11 +829,29 @@ function wireButtons() {
   $('#btn-reload').addEventListener('click', () => location.reload());
 }
 
+// ---------- loading overlay helpers ----------
+
+function setLoadingPhase(text) {
+  const el = document.getElementById('loading-phase');
+  if (el) el.textContent = text;
+}
+
+function hideLoadingOverlay() {
+  const el = document.getElementById('loading-overlay');
+  if (!el) return;
+  el.classList.add('is-hiding');
+  el.setAttribute('aria-busy', 'false');
+}
+
+
 async function init() {
   wireTabs();
   wireButtons();
+  setLoadingPhase('读取 state/ 快照…');
   await pollState();
+  setLoadingPhase('加载 prompt log…');
   await refreshPrompts();
+  setLoadingPhase('读取运行状态…');
   await pollStatus();
   pollPrompts();
   // fast state refresh
@@ -845,10 +863,13 @@ async function init() {
   })();
 
   // Auto-open the first produced chapter on first load
+  setLoadingPhase('渲染界面…');
   if (state.snapshot && state.snapshot.chapters.length) {
     const produced = state.snapshot.chapters.find((c) => c.has_md);
     if (produced) openFile(`state/chapters/ch${String(produced.ch).padStart(3, '0')}.md`);
   }
+
+  requestAnimationFrame(hideLoadingOverlay);
 }
 
 window.addEventListener('DOMContentLoaded', init);

@@ -270,6 +270,7 @@ function toast(msg, isErr = false) {
 
 // ---------- build /api/state locally ----------
 async function buildSnapshot() {
+  setLoadingPhase('读取大纲与进度…');
   const [progress, outline, issuesArr, debtArr, promptsArr] = await Promise.all([
     fetchJSON(SNAPSHOT_BASE + 'progress.json'),
     fetchJSON(SNAPSHOT_BASE + 'outline.json'),
@@ -282,6 +283,7 @@ async function buildSnapshot() {
   // (overwrite-style), not per-chapter, and may not yet exist in snapshots
   // produced before the bookkeeping layer was added. The UI degrades
   // gracefully: missing items render as dimmed 'not generated' rows.
+  setLoadingPhase('扫描 Lesson-3 账本…');
   const [
     hasStatusCard, hasPendingHooks, hasResourceSchema, hasResourceLedger,
   ] = await Promise.all([
@@ -300,30 +302,44 @@ async function buildSnapshot() {
   // cache prompts globally (newest first, capped)
   state.prompts = promptsArr.slice().reverse().slice(0, 50);
 
-  const chapters = [];
-  for (const entry of (outline.chapters || [])) {
-    const n = entry.ch;
-    const nnn = String(n).padStart(3, '0');
-    const probes = await Promise.all([
-      headOk(SNAPSHOT_BASE + `chapters/ch${nnn}.md`),
-      headOk(SNAPSHOT_BASE + `chapters/ch${nnn}.plan.json`),
-      headOk(SNAPSHOT_BASE + `chapters/ch${nnn}.verdict.json`),
-      headOk(SNAPSHOT_BASE + `summaries/ch${nnn}.md`),
-      headOk(SNAPSHOT_BASE + `fixes/ch${nnn}.slop-patch.md`),
-      headOk(SNAPSHOT_BASE + `fixes/ch${nnn}.char-patch.md`),
-    ]);
-    chapters.push({
-      ch: n,
-      title: entry.title || `第 ${n} 章`,
-      has_md: probes[0],
-      has_plan: probes[1],
-      has_verdict: probes[2],
-      has_summary: probes[3],
-      has_slop_patch: probes[4],
-      has_char_patch: probes[5],
-    });
-  }
+  // Probe every chapter × every artifact IN PARALLEL.
+  // Previously: `for (ch of chapters) await Promise.all(6 probes)` — the
+  // outer loop awaited sequentially, so 10 chapters × ~100ms RTT
+  // compounded to 1-2s visible hang on GitHub Pages. Flattening into one
+  // Promise.all reduces wall-time to a single round-trip.
+  setLoadingPhase(
+    `扫描 ${(outline.chapters || []).length} 章产物…`
+  );
+  const outlineChapters = outline.chapters || [];
+  const ARTIFACTS = [
+    (nnn) => `chapters/ch${nnn}.md`,
+    (nnn) => `chapters/ch${nnn}.plan.json`,
+    (nnn) => `chapters/ch${nnn}.verdict.json`,
+    (nnn) => `summaries/ch${nnn}.md`,
+    (nnn) => `fixes/ch${nnn}.slop-patch.md`,
+    (nnn) => `fixes/ch${nnn}.char-patch.md`,
+  ];
+  const allProbes = outlineChapters.flatMap((entry) => {
+    const nnn = String(entry.ch).padStart(3, '0');
+    return ARTIFACTS.map((mk) => headOk(SNAPSHOT_BASE + mk(nnn)));
+  });
+  const probeResults = await Promise.all(allProbes);
 
+  const chapters = outlineChapters.map((entry, idx) => {
+    const base = idx * ARTIFACTS.length;
+    return {
+      ch: entry.ch,
+      title: entry.title || `第 ${entry.ch} 章`,
+      has_md:          probeResults[base + 0],
+      has_plan:        probeResults[base + 1],
+      has_verdict:     probeResults[base + 2],
+      has_summary:     probeResults[base + 3],
+      has_slop_patch:  probeResults[base + 4],
+      has_char_patch:  probeResults[base + 5],
+    };
+  });
+
+  setLoadingPhase('渲染界面…');
   return {
     progress, chapters,
     novel: { title: outline.title, subtitle: outline.subtitle, protagonist: outline.protagonist },
@@ -336,6 +352,33 @@ async function buildSnapshot() {
     readonly_mode: true,
     static_demo: true,
   };
+}
+
+
+// ---------- loading overlay helpers ----------
+
+function setLoadingPhase(text) {
+  const el = document.getElementById('loading-phase');
+  if (el) el.textContent = text;
+}
+
+function showLoadingOverlay(initialPhase) {
+  const el = document.getElementById('loading-overlay');
+  if (!el) return;
+  // Keep overlay in DOM (don't remove it) so the second-open demo-switch
+  // can re-show it without re-creating DOM. Just toggle the hidden class.
+  el.classList.remove('is-hiding');
+  el.setAttribute('aria-busy', 'true');
+  if (initialPhase) setLoadingPhase(initialPhase);
+}
+
+function hideLoadingOverlay() {
+  const el = document.getElementById('loading-overlay');
+  if (!el) return;
+  el.classList.add('is-hiding');
+  el.setAttribute('aria-busy', 'false');
+  // Don't .remove() — we keep the node around so setActiveDemo can reuse
+  // it when the user switches demo sets (avoids flash of no-overlay).
 }
 
 // ---------- top bar pills ----------
@@ -372,7 +415,7 @@ function renderBrandSub() {
   const parts = [];
   if (novel.title) parts.push(novel.title);
   if (novel.subtitle) parts.push(novel.subtitle);
-  parts.push('多智能体小说写作流水线 · 只读快照');
+  parts.push('小说锻造厂 · 只读快照');
   el.textContent = parts.join(' · ');
 
   // Page title too
@@ -888,7 +931,10 @@ async function setActiveDemo(id) {
   state.openPromptIds = new Set();
   state.fileCache = new Map();
   state.existCache = new Map();
+  // Show overlay again — switching can take a second or two on Pages.
+  showLoadingOverlay(`正在切换到 ${conf.label}…`);
   await reloadAfterSwitch();
+  requestAnimationFrame(hideLoadingOverlay);
 }
 
 async function reloadAfterSwitch() {
@@ -961,17 +1007,22 @@ async function init() {
       try {
         state.snapshot = await buildSnapshot();
       } catch (e2) {
+        setLoadingPhase('加载失败：' + e2.message);
         $('#tree').innerHTML = '';
         $('#tree').appendChild(el('div', { class: 'tree-empty' },
           '无法加载 demo_snapshot/: ' + e2.message));
         toast('加载失败: ' + e2.message, true);
+        // Keep overlay visible a moment so the error is readable, then hide.
+        setTimeout(hideLoadingOverlay, 1200);
         return;
       }
     } else {
+      setLoadingPhase('加载失败：' + e.message);
       $('#tree').innerHTML = '';
       $('#tree').appendChild(el('div', { class: 'tree-empty' },
         '无法加载 demo_snapshot/: ' + e.message));
       toast('加载失败: ' + e.message, true);
+      setTimeout(hideLoadingOverlay, 1200);
       return;
     }
   }
@@ -986,6 +1037,10 @@ async function init() {
   if (produced) {
     openFile(`state/chapters/ch${String(produced.ch).padStart(3, '0')}.md`);
   }
+
+  // All paint is done — drop the overlay on the next animation frame so
+  // the tree + opened chapter are fully painted before the fade-out starts.
+  requestAnimationFrame(hideLoadingOverlay);
 }
 
 window.addEventListener('DOMContentLoaded', init);

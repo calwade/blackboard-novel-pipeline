@@ -15,6 +15,19 @@
 </head>
 <body class="has-static-banner">
 
+<!-- Loading overlay — shown on first paint, hidden by init() after snapshot build.
+     Purpose: avoid 2-5s empty-UI gap while 60+ HEAD probes resolve on GitHub Pages. -->
+<div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite" aria-busy="true">
+  <div class="loading-card">
+    <div class="loading-mark" aria-hidden="true">◐</div>
+    <div class="loading-title">Novelforge</div>
+    <div class="loading-sub">小说锻造厂 · 多 Agent 长链路流水线</div>
+    <div class="loading-bar" aria-hidden="true"><div class="loading-bar-fill"></div></div>
+    <div class="loading-phase" id="loading-phase">正在加载快照…</div>
+    <div class="loading-hint">首次加载需要从 GitHub Pages 拉取 ~60 个文件；平均 2–4 秒。</div>
+  </div>
+</div>
+
 <div class="static-banner" role="note">
   <div class="sb-left">
     <span class="sb-mark">◐</span>
