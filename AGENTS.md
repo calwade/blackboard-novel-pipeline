@@ -54,6 +54,10 @@ python -m src.pipeline --chapter 1
 | `state/writing-style-extra.md` | 题材特有风格补充 | setting pack |
 | `state/iron-laws-extra.md` | 题材特有铁律 | setting pack |
 | `state/progress.json` | 当前章节、已完成章节、运行中状态 | pipeline 运行时更新 |
+| `state/current_status_card.md` | **当前时间点唯一的权威状态覆盖文件**（主角状态/敌我/资源/已知真相/活跃伏笔/下一章任务卡）。Context Reset 重建局势的入口 | StatusCardUpdater（每章末尾覆盖式更新） |
+| `state/pending_hooks.md` | **待回收伏笔池**（活跃伏笔 + 本章刚回收的伏笔）。Planner 每章必读 | HookKeeper（每章末尾覆盖式更新） |
+| `state/resource_schema.yaml` | 题材的**可追踪资源定义**（灵石/情报值/黑金/境界等）。**可选** —— 题材无需则不注入 | setting pack（bootstrap 注入） |
+| `state/resource_ledger.md` | 按 schema 记录的资源账本（当前余额 + 本章变动）。仅当 schema 存在时生成 | ResourceLedger（每章末尾覆盖式更新） |
 | `state/chapters/chNNN.md` | 第 N 章正文 | Generator / Fixer |
 | `state/chapters/chNNN.plan.json` | 第 N 章节拍表 | Planner |
 | `state/chapters/chNNN.verdict.json` | 第 N 章 Evaluator 判词 | Evaluator |
@@ -69,11 +73,14 @@ python -m src.pipeline --chapter 1
 
 | Agent | 读 | 写 | Temp | 核心 Prompt 要点 |
 |---|---|---|---|---|---|
-| Planner | outline + 最近 2 summary + setting.yaml | chNNN.plan.json | 0.4 | 责编视角，输出严格 JSON |
+| Planner | outline + 最近 2 summary + setting.yaml + **current_status_card.md** + **pending_hooks.md** | chNNN.plan.json | 0.4 | 责编视角，输出严格 JSON；必读状态卡+伏笔池作为当前权威 |
 | Generator | plan + characters + setting.yaml + era + writing-style（core + extra） | chNNN.md (~3000字) | 0.85 | Show-Don't-Tell，禁 AI 味 |
 | Evaluator | chNNN.md + 18-landmines + 24-iron-laws（core + extra）+ characters + timeline | verdict.json + issues.jsonl | 0.0 | 对抗人设，默认拒稿，JSON rubric + skeleton detector |
 | Fixer | chNNN.md + verdict.top_3_fixes + writing-style（core + extra） | 覆写 chNNN.md | 0.5 | 只修不重写 |
 | Summarizer | chNNN.md **（不读 plan/issues，防 framing 泄漏）** | summaries/chNNN.md | 0.2 | 客观白描 |
+| **StatusCardUpdater** | chNNN.md + 上一版 current_status_card.md + characters.yaml + setting.yaml | **current_status_card.md**（覆盖式） | 0.2 | Lesson 3：当前时间点唯一快照；读正文，不读 plan/verdict/issues |
+| **HookKeeper** | chNNN.md + 上一版 pending_hooks.md + current_status_card.md | **pending_hooks.md**（覆盖式） | 0.2 | 维护活跃伏笔池，回收/新增/推进三操作；只从正文抽取 |
+| **ResourceLedger**（可选） | resource_schema.yaml + chNNN.md + 上一版 resource_ledger.md | **resource_ledger.md**（覆盖式） | 0.2 | 仅在 setting 提供 resource_schema.yaml 时运行；监控资源跳数量级 |
 | AISlopGuard | chNNN.md + 摘取 AI 味条目 | fixes/chNNN.slop-patch.md | 0.2 | 只报 AI 味相关（moderate/severe） |
 | CharacterGuard | chNNN.md + characters.yaml + 历史 summaries | fixes/chNNN.char-patch.md | 0.2 | 只报人设偏移 |
 | PackagingAgent | setting.yaml + outline.json + characters.yaml + era.md + ch001.md + 最后章节 | packaging.json | 0.6 | 书名/简介/封面/标签包装，独立运行 `--packaging` |
