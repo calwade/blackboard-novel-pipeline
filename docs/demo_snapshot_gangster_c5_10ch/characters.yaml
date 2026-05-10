@@ -1,0 +1,64 @@
+protagonist:
+  id: lin_jiayao
+  name: 林家耀
+  gender: 男
+  age_1983: 22
+  origin: 福建泉州
+  arrived_hk: 1983-06
+  appearance: 约 177cm，瘦削，眼神冷，左眉骨上有细长旧伤疤
+  traits:
+  - 极致利己
+  - 有底线
+  - 算计>胆大
+  redlines:
+  - 不碰毒品生意
+  - 不动未成年人
+  - 不杀无辜老人小孩
+  contradictions:
+  - 话少但熟悉港乐
+  - 可黑吃黑但吃街边大排档
+  catchphrase:
+  - 数字不会骗人
+  - 先算账，再算命
+  system:
+    name: 港务档案
+    capability: 查询 1983-2000 公开事件、股价、报纸头条（仅查询）
+    currency: 情报值
+    initial_balance: 100
+    earn_by: 完成拨乱反正任务（扳贪官、阻惨案）
+    hard_limits:
+    - 不能预知任何人的私密对话
+    - 不能物理输出（不发炮、不治伤）
+    - 不能替主角谈判或参与现场
+supporting:
+- id: a_wei
+  name: 阿威（陈威）
+  role: 第一个小弟
+  age_1983: 22
+  origin: 九龙城寨
+  weakness: 母亲病重，钱和孝是两条命
+  loyalty_source: 第 1 章被主角救过
+- id: su_ting
+  name: 苏婷
+  role: 第二方视角记者
+  age_1983: 25
+  affiliation: TVB 新闻部
+  motivation: 记者本能 + 家族求真传统
+  narrative_rule_前10章: 不是恋爱对象，是对手+镜像
+- id: zhao_laosi
+  name: 赵老四
+  role: 中环地产经纪 / 情报触手
+  age_1983: 41
+  origin: 浙江宁波 → 1949 南下
+  trust_level_for_主角: 永远不完全信
+- id: mr_walsh
+  name: Mr. Walsh
+  role: 英籍皇家警察高级督察
+  age_1983: 45
+  nationality: 苏格兰
+  利用边界: 用其情报、借其手、最后驱逐或控制
+- id: lao_jiang
+  name: 老姜（姜伯）
+  role: 避风塘江湖向导
+  age_1983: 60
+  unspoken_pain: 儿子在新义安做红棍
