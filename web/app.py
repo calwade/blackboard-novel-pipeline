@@ -112,6 +112,17 @@ def api_state():
     issue_count = len(bb.read_jsonl("issues.jsonl"))
     prompt_count = len(bb.read_jsonl("prompts_log.jsonl"))
 
+    # Bookkeeping artifacts (global, overwrite-style — not per-chapter).
+    # Reflects C-23 / C-24 / C-25: StatusCardUpdater, HookKeeper, ResourceLedger.
+    # The absence of resource_schema.yaml is a FEATURE (non-numeric settings
+    # opt out of the resource ledger), so we surface that explicitly.
+    bookkeeping = {
+        "has_status_card": bb.exists("current_status_card.md"),
+        "has_pending_hooks": bb.exists("pending_hooks.md"),
+        "has_resource_schema": bb.exists("resource_schema.yaml"),
+        "has_resource_ledger": bb.exists("resource_ledger.md"),
+    }
+
     return jsonify(
         {
             "progress": progress,
@@ -121,6 +132,7 @@ def api_state():
                 "subtitle": outline.get("subtitle"),
                 "protagonist": outline.get("protagonist"),
             },
+            "bookkeeping": bookkeeping,
             "debt_count": debt_count,
             "issue_count": issue_count,
             "prompt_count": prompt_count,

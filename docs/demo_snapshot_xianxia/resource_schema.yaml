@@ -1,0 +1,89 @@
+# Resource Schema — xianxia-ascension
+# 声明本题材有哪些"可追踪资源"。由 ResourceLedger Agent 在每章末尾扫描正文，
+# 把对应资源的增减登记到 state/resource_ledger.md。
+# Evaluator 在审稿时也会用这个 schema 核对跳数量级风险。
+#
+# 本文件**可选**。如果 setting 不需要资源账本（例如都市言情），
+# 不创建此文件即可，pipeline 会自动跳过 ResourceLedger 这一步。
+
+# 资源定义：每条 entry 给 LLM 提供识别 + 估值依据
+resources:
+  - id: lingshi
+    display_name: 灵石
+    unit: 颗
+    description: |
+      修真者的基础流通货币。低阶灵石为主，中阶罕见，高阶为重大资源。
+      日常开销按低阶；突破筑基消耗以百计，筑基期一次性突破约 100-500 颗。
+    baseline_scale:
+      low: 1-10
+      medium: 10-100
+      large: 100-1000
+      exceptional: 1000+
+    track_priority: high
+
+  - id: lingcao
+    display_name: 灵草/灵药
+    unit: 株
+    description: |
+      主角采集或缴获的灵药。需要区分"几品"，高品灵药不可无铺垫突然拥有。
+      每章若提到得失，应记录品阶 + 数量。
+    baseline_scale:
+      low: 一至三品（1-10 株视为普通）
+      medium: 四至五品（需具体来源）
+      large: 六品以上（重大事件才出现）
+      exceptional: 七品以上/完整古药园（必须有大事件铺垫）
+    track_priority: medium
+
+  - id: jingjie
+    display_name: 境界/修为
+    unit: 阶
+    description: |
+      主角的修行进度。境界顺序：炼气一至九层 → 筑基初/中/后期 → 金丹 → 元婴 → ...
+      **境界跳跃必须显式**：不得"暗中修炼多年直接突破"；任何一次突破都要写场景与代价。
+    baseline_scale:
+      low: 炼气层级内 +1 层（常规）
+      medium: 大境界圆满 → 下一大境界前期（需要顿悟或资源铺垫）
+      large: 跨大境界（金丹→元婴），至少需要一整卷铺垫
+      exceptional: 连升两大境界（视为异常，必须有外挂级事件）
+    track_priority: high
+
+  - id: faqi
+    display_name: 法器/法宝
+    unit: 件
+    description: |
+      主角持有的法宝。品阶：凡器 → 法器 → 灵器 → 宝器 → 仙器。
+      每次获得/损毁需要登记品阶、来源、消耗程度。
+    baseline_scale:
+      low: 凡器/低阶法器（日常获得）
+      medium: 灵器（需要机缘或战利品）
+      large: 宝器（必须重大事件）
+      exceptional: 仙器（全书罕见）
+    track_priority: medium
+
+  - id: yinyuan
+    display_name: 因果/业力
+    unit: 点
+    description: |
+      仙侠特有的长期账：积善 / 背誓 / 斩仇 会形成因果。主角的关键承诺、
+      仇敌的遗言、救命之恩都应登记，影响后续剧情的合理性。
+    baseline_scale:
+      low: 日常积善/小交易（+/-1-5）
+      medium: 承诺、重要恩义、小仇家（+/-5-20）
+      large: 宗门级承诺、大恩大仇（+/-20-100）
+      exceptional: 天地誓言、斩杀天骄（+/-100+）
+    track_priority: high
+
+# 校验规则（交给 Evaluator 与 ResourceLedger 两方共用）
+validation:
+  # 同类型资源的增量不得无说明跨数量级
+  increment_rules:
+    - threshold_3x: "同类型同品阶单次增量 >3倍既有样本 → 必须解释稀有性或复合来源"
+    - threshold_10x: "同类型同品阶单次增量 >10倍 → 默认视为异常，Evaluator 应 hit landmine_power_scaling"
+  # 禁词：不得用模糊词掩盖数值跳变
+  forbidden_fuzzy_terms:
+    - 暴涨
+    - 海量
+    - 难以估量
+    - 无法计算
+    - 再度精进
+    - 实力暴涨

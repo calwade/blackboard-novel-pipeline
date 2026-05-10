@@ -1,0 +1,71 @@
+# Resource Schema — gangster-hk-1983
+# 港综题材的可追踪资源账本。情报值 / 黑金 / 人情是主角金融操盘的硬通货。
+
+resources:
+  - id: intel_value
+    display_name: 情报值
+    unit: 点
+    description: |
+      系统金手指的可用"查询配额"。主角通过完成"拨乱反正"任务（扳贪官、阻止
+      真实历史惨剧、贡献关键情报给正义方）获得。每次查询消耗。
+      规则：不得靠水文积累；每次获取必须附明确事件。
+    baseline_scale:
+      low: 1-5 点（小型拨乱反正任务）
+      medium: 5-20 点（中等事件，如扳一个贪污警司）
+      large: 20-100 点（重大事件，如阻止 1984 年某次真实悲剧）
+      exceptional: 100+ 点（主线卷末级别贡献）
+    track_priority: high
+
+  - id: black_money
+    display_name: 黑金
+    unit: 港元（HKD）
+    description: |
+      1983-2000 港币计价。主角在金融操盘、股市、社团分账中流转的现金。
+      必须对应 era.md 的时代物价（1983 年一套红磡地产约 10-30 万；一碗云吞面 5 元）。
+    baseline_scale:
+      low: 1000 以下（日常开销）
+      medium: 1 万 - 10 万（小型交易、一次股市抄底）
+      large: 10 万 - 500 万（社团分账、中型地产）
+      exceptional: 500 万以上（金融大局、卷末级收益）
+    track_priority: high
+
+  - id: social_capital
+    display_name: 人情/江湖地位
+    unit: 档
+    description: |
+      主角在四大社团、警界、商界、廉政公署中的信用值。分四档：
+      - 素人：几乎没人认（外围）
+      - 有名号：社团或警局有人点头（4 档）
+      - 坐上台面：可以直接和坐馆 / 警司 / 商界大班对话（3 档）
+      - 举足轻重：话一出去能让一方震动（2 档）
+      - 江湖共认：无人敢直接敌对（1 档，卷末级）
+    baseline_scale:
+      low: 素人 → 有名号（自然进阶）
+      medium: 有名号 → 坐上台面（必须有立功事件）
+      large: 坐上台面 → 举足轻重（卷级事件）
+      exceptional: 举足轻重 → 江湖共认（全书只此一次）
+    track_priority: medium
+
+  - id: enemies_and_debts
+    display_name: 仇家/欠账
+    unit: 条
+    description: |
+      主角欠的血仇、答应未完成的事、未还的人情。每出现一个必须登记——
+      "逃了的敌人""没拿到的宝物""未解释的耳语"三类必登；其他（欠某位探长的人情、
+      未兑现的承诺）也要登。
+    baseline_scale:
+      low: 欠一个小人情（日常）
+      medium: 中型仇家或承诺（需要一卷内处理）
+      large: 社团级血仇（跨卷影响）
+      exceptional: 生死线上的大仇（全书主线）
+    track_priority: high
+
+validation:
+  increment_rules:
+    - threshold_3x: "情报值 / 黑金单次增量 >3倍常规获得 → 必须解释来源"
+    - threshold_10x: "单次 >10倍视为异常 → Evaluator hit landmine_power_scaling"
+  forbidden_fuzzy_terms:
+    - 赚了大钱
+    - 情报值暴涨
+    - 江湖地位一飞冲天
+    - 资金海量

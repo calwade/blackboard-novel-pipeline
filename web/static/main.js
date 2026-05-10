@@ -6,22 +6,32 @@
 'use strict';
 
 const AGENT_COLORS = {
-  planner:         '#5aa7ff',
-  generator:       '#62d97a',
-  evaluator:       '#f85149',
-  fixer:           '#ffb454',
-  summarizer:      '#9aa5b5',
-  ai_slop_guard:   '#b78dff',
-  character_guard: '#3dd5c8',
+  planner:              '#5aa7ff',
+  generator:            '#62d97a',
+  evaluator:            '#f85149',
+  fixer:                '#ffb454',
+  summarizer:           '#9aa5b5',
+  arc_summarizer:       '#7a85a0',
+  book_summarizer:      '#6d7788',
+  status_card_updater:  '#c4a0ff',
+  hook_keeper:          '#f0a0d0',
+  resource_ledger:      '#d0b070',
+  ai_slop_guard:        '#b78dff',
+  character_guard:      '#3dd5c8',
 };
 const AGENT_LABEL = {
-  planner: 'PLANNER',
-  generator: 'GENERATOR',
-  evaluator: 'EVALUATOR',
-  fixer: 'FIXER',
-  summarizer: 'SUMMARIZER',
-  ai_slop_guard: 'AI-SLOP GUARD',
-  character_guard: 'CHARACTER GUARD',
+  planner:              'PLANNER',
+  generator:            'GENERATOR',
+  evaluator:            'EVALUATOR',
+  fixer:                'FIXER',
+  summarizer:           'SUMMARIZER',
+  arc_summarizer:       'ARC SUMMARIZER',
+  book_summarizer:      'BOOK SUMMARIZER',
+  status_card_updater:  'STATUS CARD',
+  hook_keeper:          'HOOK KEEPER',
+  resource_ledger:      'RESOURCE LEDGER',
+  ai_slop_guard:        'AI-SLOP GUARD',
+  character_guard:      'CHARACTER GUARD',
 };
 
 // ---------- LESSONS (pitch crosswalk: principle → code) ----------
@@ -51,7 +61,8 @@ const LESSONS = [
     attribution_color: 'anthropic',
     principle: '干活的和验收的必须是不同的人',
     impl: [
-      'Planner / Generator / Evaluator / Fixer / Summarizer 五个独立 Agent',
+      'Planner / Generator / Evaluator / Fixer / Summarizer 五个创作 Agent',
+      'StatusCardUpdater / HookKeeper / ResourceLedger 三个 bookkeeping Agent (覆盖式)',
       'Evaluator 用对抗人设 (默认拒稿) + 结构化 JSON rubric (18 landmines × severity)',
       'Evaluator 看不到 Generator 的推理过程, 只看最终文件',
       '服务端重算 overall_pass, 不信模型自评 + skeleton detector 防模型复制示例',
@@ -60,6 +71,7 @@ const LESSONS = [
       { label: 'src/agents/evaluator.py', desc: '对抗人设 + JSON rubric + skeleton detector', github_path: 'src/agents/evaluator.py', logical_path: null },
       { label: 'rules/18-landmines.md',   desc: '18 个雷点的结构化判据 (通用)',              github_path: 'rules/18-landmines.md',   logical_path: 'rules/18-landmines.md' },
       { label: 'state/iron-laws-extra.md', desc: '题材特有铁律 (setting 注入)',              github_path: null,                      logical_path: 'state/iron-laws-extra.md' },
+      { label: 'rules/00-information-priority.md', desc: '冲突仲裁协议 (9 级优先级 + R1..R5)', github_path: 'rules/00-information-priority.md', logical_path: 'rules/00-information-priority.md' },
     ],
   },
   {
@@ -71,12 +83,18 @@ const LESSONS = [
     impl: [
       '每次 LLM 调用都是 fresh session (见 Inspector: 每行 ≤6 文件, 无累积)',
       'Summarizer 严格只读最终 chapter, 不读 plan/verdict/issues (防 framing 后门泄漏)',
-      'Planner 读 ≤2 份前章摘要, 不读全文, 天然 context 瘦身',
+      'Planner 读 ≤2 份前章摘要 + 当前状态卡 + 伏笔池, 不读全文',
+      'StatusCardUpdater 每章末覆盖 state/current_status_card.md — 进程重启读它即可恢复',
+      'HookKeeper 每章末覆盖 state/pending_hooks.md — 避免 10+ 章漏伏笔',
+      'ResourceLedger (可选) 每章末覆盖 state/resource_ledger.md — 仅当 setting 声明 schema',
     ],
     code_pointers: [
-      { label: 'src/llm.py',               desc: '每次调用新建 messages 数组, 无跨调用 memory', github_path: 'src/llm.py',               logical_path: null },
-      { label: 'src/agents/summarizer.py', desc: 'Summarizer 只读 chapter file (严防泄漏)',   github_path: 'src/agents/summarizer.py', logical_path: null },
-      { label: 'state/prompts_log.jsonl',  desc: '每次调用的 inputs_read 清单 (见 Inspector)', github_path: null,                       logical_path: 'state/prompts_log.jsonl' },
+      { label: 'src/llm.py',                      desc: '每次调用新建 messages 数组, 无跨调用 memory', github_path: 'src/llm.py',                      logical_path: null },
+      { label: 'src/agents/summarizer.py',        desc: 'Summarizer 只读 chapter file (严防泄漏)',    github_path: 'src/agents/summarizer.py',        logical_path: null },
+      { label: 'src/agents/status_card_updater.py', desc: 'StatusCardUpdater — 唯一的当前时间点快照', github_path: 'src/agents/status_card_updater.py', logical_path: null },
+      { label: 'src/agents/hook_keeper.py',       desc: 'HookKeeper — 待回收伏笔池',                  github_path: 'src/agents/hook_keeper.py',       logical_path: null },
+      { label: 'state/current_status_card.md',    desc: 'Context Reset 的单一入口文件',               github_path: null,                              logical_path: 'state/current_status_card.md' },
+      { label: 'state/prompts_log.jsonl',         desc: '每次调用的 inputs_read 清单 (见 Inspector)', github_path: null,                              logical_path: 'state/prompts_log.jsonl' },
     ],
   },
   {
@@ -284,6 +302,20 @@ function renderTree() {
     ['state/prompts_log.jsonl',      'prompts_log.jsonl',      '•'],
   ].forEach(([p, name, icon]) => tree.appendChild(treeItem(p, name, icon || '•')));
 
+  // Section: bookkeeping ledgers (Lesson-3 Context Reset layer)
+  // - current_status_card.md (C-23) — overwrite, always present after ch1
+  // - pending_hooks.md       (C-25) — overwrite, always present after ch1
+  // - resource_schema.yaml   (C-24) — optional; absent for non-numeric settings
+  // - resource_ledger.md     (C-24) — only present when schema exists
+  tree.appendChild(sectionHeader('bookkeeping/ (Lesson-3 ledgers)'));
+  const bk = (s.bookkeeping || {});
+  [
+    ['state/current_status_card.md', 'current_status_card.md', '❂', !bk.has_status_card],
+    ['state/pending_hooks.md',       'pending_hooks.md',       '⚑', !bk.has_pending_hooks],
+    ['state/resource_schema.yaml',   'resource_schema.yaml',   '◆', !bk.has_resource_schema],
+    ['state/resource_ledger.md',     'resource_ledger.md',     '⚖', !bk.has_resource_ledger],
+  ].forEach(([p, name, icon, missing]) => tree.appendChild(treeItem(p, name, icon, missing)));
+
   // Section: chapters folder, one group per chapter
   tree.appendChild(sectionHeader('chapters/'));
   const chWrap = el('div', { class: 'tree-group-items' });
@@ -318,9 +350,10 @@ function renderTree() {
   // Section: rules (Progressive Disclosure)
   tree.appendChild(sectionHeader('rules/ (universal)'));
   [
-    ['rules/24-iron-laws.md',        '24-iron-laws.md'],
-    ['rules/18-landmines.md',        '18-landmines.md'],
-    ['rules/writing-style-core.md',  'writing-style-core.md'],
+    ['rules/00-information-priority.md', '00-information-priority.md'],
+    ['rules/24-iron-laws.md',            '24-iron-laws.md'],
+    ['rules/18-landmines.md',            '18-landmines.md'],
+    ['rules/writing-style-core.md',      'writing-style-core.md'],
   ].forEach(([p, name]) => tree.appendChild(treeItem(p, name, '§')));
 
   // Section: project root
