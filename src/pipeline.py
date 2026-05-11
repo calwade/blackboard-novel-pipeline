@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import json
+import threading
 import time
 import traceback
 from datetime import datetime
@@ -47,6 +48,20 @@ from .auditors.fact_checker import FactChecker, should_run as fact_checker_shoul
 from .blackboard import Blackboard
 
 MAX_FIXER_RETRIES = 2
+
+# Cooperative cancel signal. Web UI sets this via POST /api/abort; every
+# pipeline stage checks before starting. Stale signals are the caller's
+# responsibility to clear before starting a new run.
+CANCEL_EVENT = threading.Event()
+
+
+class PipelineAborted(RuntimeError):
+    """Raised when CANCEL_EVENT is set between stages."""
+
+
+def _check_cancel() -> None:
+    if CANCEL_EVENT.is_set():
+        raise PipelineAborted("pipeline aborted by cancel signal")
 
 
 def _update_progress(bb: Blackboard, patch: dict) -> None:
@@ -94,6 +109,7 @@ def run_chapter(bb: Blackboard, chapter: int) -> dict:
 
     def _stage(name: str, fn):
         """Run a stage and record its duration, surfacing exceptions."""
+        _check_cancel()
         t0 = time.time()
         _update_in_flight(bb, chapter, name)
         try:
@@ -173,6 +189,7 @@ def run_chapter(bb: Blackboard, chapter: int) -> dict:
     def _run_auditor(AuditorClass):
         AuditorClass().run(bb, chapter=chapter)
 
+    _check_cancel()
     _update_in_flight(bb, chapter, "audit_fanout")
     t0 = time.time()
     auditor_slots: dict[str, type] = {
