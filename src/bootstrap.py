@@ -158,7 +158,7 @@ def empty_progress() -> dict:
     }
 
 
-def bootstrap_project(project_id: str) -> BootstrapResult:
+def bootstrap_project(project_id: str, *, preserve_progress: bool = False) -> BootstrapResult:
     """Activate a project and seed its state/ directory in-process.
 
     This is the pure function that both the CLI and Web API call. It does
@@ -238,9 +238,23 @@ def bootstrap_project(project_id: str) -> BootstrapResult:
     _write_yaml(state_dir / "setting.yaml", merged)
     copied.append("setting.yaml (synthesized)")
 
-    # 4. Reset progress, touch accumulators
-    _write_json(state_dir / "progress.json", {
-        **empty_progress(),
+    # 4. Reset or preserve progress, touch accumulators
+    existing_progress = {}
+    progress_path = state_dir / "progress.json"
+    if preserve_progress and progress_path.exists():
+        try:
+            existing_progress = json.loads(progress_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing_progress = {}
+    base = empty_progress() if not preserve_progress else {
+        "current_chapter": existing_progress.get("current_chapter", 0),
+        "completed_chapters": existing_progress.get("completed_chapters", []),
+        "in_flight": existing_progress.get("in_flight"),
+        "last_update": existing_progress.get("last_update"),
+        "total_llm_calls": existing_progress.get("total_llm_calls", 0),
+    }
+    _write_json(progress_path, {
+        **base,
         "active_project": project_id,
         "active_genre": genre_id,
         "bootstrapped_at": datetime.now().isoformat(timespec="seconds"),

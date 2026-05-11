@@ -206,6 +206,68 @@ def api_project_new():
     return jsonify({"ok": True, "project_dir": str(project_dir), "id": pid})
 
 
+# ---------- project file editing ----------
+_PROJECT_EDITABLE = {"project.yaml", "outline.json", "characters.yaml", "timeline.yaml"}
+
+
+def _active_project_path(name: str) -> Path:
+    """Resolve a file in the currently active project's source dir.
+
+    Enforces the whitelist at the single boundary so callers can't smuggle
+    arbitrary paths. Raises Flask 400/409 as appropriate.
+    """
+    if name not in _PROJECT_EDITABLE:
+        abort(400, f"name must be one of {sorted(_PROJECT_EDITABLE)}")
+    pid = config.get_active_project_id()
+    if not pid:
+        abort(409, "no active project")
+    return config.PROJECTS_DIR / pid / name
+
+
+@app.get("/api/project-files")
+def api_project_file_get():
+    name = request.args.get("name", "").strip()
+    if not name:
+        return jsonify({"ok": False, "reason": "name query parameter required"}), 400
+    path = _active_project_path(name)
+    if not path.exists():
+        return jsonify({"ok": False, "reason": f"{name} not found in active project"}), 404
+    return jsonify({
+        "name": name,
+        "content": path.read_text(encoding="utf-8"),
+        "mtime": path.stat().st_mtime,
+    })
+
+
+@app.put("/api/project-files")
+def api_project_file_put():
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if "content" not in data:
+        return jsonify({"ok": False, "reason": "content required"}), 400
+    content = data["content"]
+    if not isinstance(content, str):
+        return jsonify({"ok": False, "reason": "content must be string"}), 400
+    path = _active_project_path(name)
+
+    # Atomic write
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)
+
+    # Re-seed state/ so agents see the new content on next run.
+    # preserve_progress=True — the user is editing source, not starting over.
+    from src import bootstrap
+    pid: str = config.get_active_project_id()  # type: ignore[assignment] — _active_project_path already validated
+    try:
+        bootstrap.bootstrap_project(pid, preserve_progress=True)
+    except (FileNotFoundError, ValueError) as e:
+        return jsonify({"ok": False, "reason": f"re-seed failed: {e}"}), 400
+    return jsonify({"ok": True, "name": name, "re_seeded": True})
+
+
 # ---------- env management ----------
 _ENV_WRITABLE = {
     "DEEPSEEK_API_KEY",
@@ -519,6 +581,11 @@ def api_status():
 
 
 # ---------- errors ----------
+@app.errorhandler(400)
+def _h400(e):
+    return jsonify({"ok": False, "reason": str(e)}), 400
+
+
 @app.errorhandler(403)
 def _h403(e):
     return jsonify({"error": "forbidden", "detail": str(e)}), 403
