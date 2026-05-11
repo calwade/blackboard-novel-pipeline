@@ -144,6 +144,8 @@ python -m src.bootstrap --project my-book
 
 ## 如何跑
 
+### 推荐路径：Web 端全流程（2026-05-11 起）
+
 ```bash
 # 1. 克隆 + 环境
 git clone https://github.com/CalWade/novelforge.git
@@ -151,34 +153,47 @@ cd novelforge
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 2. 配置 LLM
+# 2. 启动 Web（即可，不用先 cp .env / 先 bootstrap）
+flask --app web.app run --port 5055
+# 浏览器打开 http://localhost:5055/
+```
+
+首次打开会触发**启动向导**：
+
+1. **填 API Key**：`DEEPSEEK_API_KEY`（必填，写入 `.env`），`PERPLEXITY_API_KEY`（可选，给 FactChecker 用）。
+2. **选作品**：从 3 个内置作品里挑一本激活（港综·林家耀 / 仙侠·裴长宁 / 都市言情·沈若微），或点「+ 新建作品」选题材脚手架一本新的。
+3. 主界面出来。顶部的 **▶ 开始 / ⏹ 中断** 控制面板支持 9 种运行模式（单章 / 批量 / 出版包装 / 只重排大纲 / 只重写 / 只重评 / 只跑修复 / 只重审计 / 只刷台账），点 ⚙ 可以随时改 API Key。
+
+切换作品、编辑元信息（`project.yaml / outline.json / characters.yaml / timeline.yaml`）、看每次 LLM 调用、查技术债——全部在浏览器里。
+
+### CLI 路径（脚本化 / CI / 老用户）
+
+```bash
 cp .env.example .env
 # 在 .env 里填入 DEEPSEEK_API_KEY
 
-# 3. 激活一本书
 python -m src.bootstrap --list-genres                         # 看所有可用题材
 python -m src.bootstrap --list                                # 看所有可用作品
-python -m src.bootstrap --project gangster-hk-1983-linjiayao  # 激活"林家耀的故事"（港综）
+python -m src.bootstrap --project gangster-hk-1983-linjiayao  # 激活"林家耀的故事"
 
-# 或者新建一本基于现有题材的书
+# 新建一本基于现有题材的书
 # python -m src.bootstrap --new-project my-book --genre gangster-hk-1983
 
-# 4. 跑流水线
+# 跑流水线
 python -m src.pipeline --chapter 1     # 跑一章（全流水线）
 python -m src.pipeline --range 1-3     # 跑一到三章
 python -m src.pipeline --audit-only 1  # 只重跑 3 个 Auditor
+python -m src.pipeline --packaging     # 跑出版包装
 
-# 4b. 按阶段重跑（不烧全流水线预算）
+# 按阶段重跑（不烧全流水线预算）
 python -m src.pipeline --plan-only 3        # 只重做第 3 章节拍表
 python -m src.pipeline --write-only 3       # 只重写第 3 章正文（复用现有 plan.json）
 python -m src.pipeline --evaluate-only 3    # 只重审第 3 章
 python -m src.pipeline --fix-only 3         # 只跑一次 Fixer（用现有 verdict.json）
 python -m src.pipeline --bookkeeping-only 3 # 人工改过正文后，重刷所有账本
-
-# 5. 打开 Web 演示（macOS 的 5000 被 AirPlay 占，所以用 5055）
-flask --app web.app run --port 5055
-# 浏览器打开 http://localhost:5055/
 ```
+
+CLI 和 Web **调用同一套 Python 函数**（`src.bootstrap.bootstrap_project` / `src.pipeline.run_*`）——不是两套平行实现，不会漂移。
 
 ---
 
@@ -268,7 +283,7 @@ novelforge/
 
 系统有两套 UI：
 
-- **`web/` Flask 动态版**：读本地 `state/` 实时刷新，按钮真的会调流水线（本地跑）
+- **`web/` Flask 动态版**：**默认入口**（见 [如何跑 · 推荐路径](#推荐路径web-端全流程2026-05-11-起)）。读本地 `state/` 实时刷新，按钮真的会调流水线；支持首次启动向导、9 种运行模式、项目切换、.env 在线编辑、源文件可视化修改（`PUT /api/project-files` 会 `preserve_progress` 地重新 seed 到 state/）、中断正在运行的 pipeline（协作式 `CANCEL_EVENT`）
 - **`docs/` 静态只读版**：读冻结的快照目录，纯展示用（GitHub Pages 托管）
 
 两套都是三面板布局：
