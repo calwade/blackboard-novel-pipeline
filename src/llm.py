@@ -22,13 +22,16 @@ from . import config
 # Chinese chapters. We trust the server's own timeout to cut us off if it dies.
 _client = httpx.Client(timeout=httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0))
 
-PROMPT_LOG_PATH = config.STATE_DIR / "prompts_log.jsonl"
+def _prompts_log_path():
+    """Resolve at call time so it follows project switches."""
+    return config.STATE_DIR / "prompts_log.jsonl"
 
 
 def _log_call(entry: dict) -> None:
     """Append one call record to the prompt log. Atomic-append via open('a')."""
-    PROMPT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with PROMPT_LOG_PATH.open("a", encoding="utf-8") as f:
+    log_path = _prompts_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 

@@ -52,8 +52,8 @@ def test_search_cache_hits_avoid_network(monkeypatch, tmp_path):
     """Second identical call must hit the cache and not post()."""
     monkeypatch.setenv("PERPLEXITY_API_KEY", "fake-key")
     # Redirect cache + log to tmp so test is isolated
-    monkeypatch.setattr(websearch, "_CACHE_DIR", tmp_path / "cache")
-    monkeypatch.setattr(websearch, "WEBSEARCH_LOG_PATH", tmp_path / "ws.jsonl")
+    monkeypatch.setattr(websearch, "_websearch_cache_dir", lambda: (tmp_path / "cache").mkdir(parents=True, exist_ok=True) or (tmp_path / "cache"))
+    monkeypatch.setattr(websearch, "_websearch_log_path", lambda: tmp_path / "ws.jsonl")
 
     call_count = {"n": 0}
 
@@ -85,8 +85,8 @@ def test_search_cache_hits_avoid_network(monkeypatch, tmp_path):
 
 def test_search_raises_on_http_error(monkeypatch, tmp_path):
     monkeypatch.setenv("PERPLEXITY_API_KEY", "fake-key")
-    monkeypatch.setattr(websearch, "_CACHE_DIR", tmp_path / "cache")
-    monkeypatch.setattr(websearch, "WEBSEARCH_LOG_PATH", tmp_path / "ws.jsonl")
+    monkeypatch.setattr(websearch, "_websearch_cache_dir", lambda: (tmp_path / "cache").mkdir(parents=True, exist_ok=True) or (tmp_path / "cache"))
+    monkeypatch.setattr(websearch, "_websearch_log_path", lambda: tmp_path / "ws.jsonl")
 
     class FakeResp:
         status_code = 500
@@ -100,8 +100,8 @@ def test_search_raises_on_http_error(monkeypatch, tmp_path):
 def test_search_network_error_raises_unavailable(monkeypatch, tmp_path):
     import httpx
     monkeypatch.setenv("PERPLEXITY_API_KEY", "fake-key")
-    monkeypatch.setattr(websearch, "_CACHE_DIR", tmp_path / "cache")
-    monkeypatch.setattr(websearch, "WEBSEARCH_LOG_PATH", tmp_path / "ws.jsonl")
+    monkeypatch.setattr(websearch, "_websearch_cache_dir", lambda: (tmp_path / "cache").mkdir(parents=True, exist_ok=True) or (tmp_path / "cache"))
+    monkeypatch.setattr(websearch, "_websearch_log_path", lambda: tmp_path / "ws.jsonl")
 
     def boom(*a, **kw):
         raise httpx.ConnectError("net down")
@@ -280,8 +280,8 @@ def test_handle_output_parse_error_branch(seeded_bb):
 
 def test_handle_output_runs_websearch_when_available(seeded_bb, monkeypatch, tmp_path):
     monkeypatch.setenv("PERPLEXITY_API_KEY", "fake-key")
-    monkeypatch.setattr(websearch, "_CACHE_DIR", tmp_path / "cache")
-    monkeypatch.setattr(websearch, "WEBSEARCH_LOG_PATH", tmp_path / "ws.jsonl")
+    monkeypatch.setattr(websearch, "_websearch_cache_dir", lambda: (tmp_path / "cache").mkdir(parents=True, exist_ok=True) or (tmp_path / "cache"))
+    monkeypatch.setattr(websearch, "_websearch_log_path", lambda: tmp_path / "ws.jsonl")
 
     called_queries: list[str] = []
 
@@ -324,8 +324,8 @@ def test_handle_output_runs_websearch_when_available(seeded_bb, monkeypatch, tmp
 def test_handle_output_caps_claims_at_3(seeded_bb, monkeypatch, tmp_path):
     """Skill #20: single-shot per chapter, max 3 claims."""
     monkeypatch.setenv("PERPLEXITY_API_KEY", "fake-key")
-    monkeypatch.setattr(websearch, "_CACHE_DIR", tmp_path / "cache")
-    monkeypatch.setattr(websearch, "WEBSEARCH_LOG_PATH", tmp_path / "ws.jsonl")
+    monkeypatch.setattr(websearch, "_websearch_cache_dir", lambda: (tmp_path / "cache").mkdir(parents=True, exist_ok=True) or (tmp_path / "cache"))
+    monkeypatch.setattr(websearch, "_websearch_log_path", lambda: tmp_path / "ws.jsonl")
 
     called: list[str] = []
     def fake_search(query, **kw):

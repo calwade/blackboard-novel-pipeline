@@ -48,12 +48,16 @@ _client = httpx.Client(
     timeout=httpx.Timeout(connect=10.0, read=60.0, write=30.0, pool=10.0)
 )
 
-WEBSEARCH_LOG_PATH = config.STATE_DIR / "websearch_log.jsonl"
+def _websearch_log_path():
+    return config.STATE_DIR / "websearch_log.jsonl"
 
 # Optional tiny file-backed cache — avoid double-billing identical queries
 # within the same setting. Keyed by md5(query + model). Cache invalidation:
 # manual — delete state/websearch_cache/ to re-fetch.
-_CACHE_DIR = config.STATE_DIR / "websearch_cache"
+def _websearch_cache_dir():
+    p = config.STATE_DIR / "websearch_cache"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 class WebSearchUnavailable(RuntimeError):
@@ -89,8 +93,9 @@ class SearchResult:
 
 def _log_call(entry: dict) -> None:
     """Append one websearch call record. Atomic-append via open('a')."""
-    WEBSEARCH_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with WEBSEARCH_LOG_PATH.open("a", encoding="utf-8") as f:
+    log_path = _websearch_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
@@ -100,7 +105,7 @@ def _cache_key(query: str, model: str) -> str:
 
 
 def _cache_read(query: str, model: str) -> SearchResult | None:
-    p = _CACHE_DIR / (_cache_key(query, model) + ".json")
+    p = _websearch_cache_dir() / (_cache_key(query, model) + ".json")
     if not p.exists():
         return None
     try:
@@ -118,8 +123,7 @@ def _cache_read(query: str, model: str) -> SearchResult | None:
 
 
 def _cache_write(result: SearchResult) -> None:
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    p = _CACHE_DIR / (_cache_key(result.query, result.model) + ".json")
+    p = _websearch_cache_dir() / (_cache_key(result.query, result.model) + ".json")
     p.write_text(
         json.dumps(
             {
