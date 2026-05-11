@@ -9,5 +9,7 @@ state/
 !state/.gitkeep
 # Per-project runtime state (2026-05-11 refactor)
 projects/*/state/
-# demo_snapshot/ is intentionally NOT ignored — it's the evidence trail for the demo
+# docs/demo_snapshot*/ is intentionally NOT ignored — it's the evidence trail
+# for the GitHub Pages static demo. Root-level demo_snapshot*/ was a duplicate
+# of the docs/ copies and got deleted on 2026-05-11.
 

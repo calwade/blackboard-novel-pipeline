@@ -15,7 +15,7 @@ resolution chases the active project.
 
 Legacy compatibility:
   - If the STATE_DIR env var is set (e.g. for hosted read-only demos pointing
-    at a frozen demo_snapshot/), that wins — mirrors prior behaviour.
+    at a frozen docs/demo_snapshot/), that wins — mirrors prior behaviour.
   - If no active project and no env override, STATE_DIR falls back to the
     legacy top-level `state/` directory. This keeps the repo runnable even
     before any project has been bootstrapped.

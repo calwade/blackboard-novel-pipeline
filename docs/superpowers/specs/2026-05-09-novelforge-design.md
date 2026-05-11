@@ -231,7 +231,8 @@ novelforge/
 │   └── superpowers/specs/
 │       └── 2026-05-09-novelforge-design.md   # 本文件
 │
-├── demo_snapshot/                # 港综 setting 3 章完整跑出的产物（Pages 数据源）
+├── docs/demo_snapshot/           # 港综 setting 3 章完整跑出的产物（Pages 数据源）
+│                                  # 注：2026-05-11 前此目录位于根目录，已移至 docs/
 │
 ├── state/                        # 运行时产物（.gitignore）
 │   ├── setting.yaml              # 当前激活的 setting（bootstrap 从 setting pack 拷入）
@@ -311,8 +312,8 @@ python -m src.pipeline --chapter 1
 
 | Setting | 状态 |
 |---|---|
-| `gangster-hk-1983` | 完整运行过 3 章，产出在 `demo_snapshot/` |
-| `xianxia-ascension` | 完整运行过 3 章，产出在 `demo_snapshot_xianxia/` |
+| `gangster-hk-1983` | 完整运行过 3 章，产出在 `docs/demo_snapshot/` |
+| `xianxia-ascension` | 完整运行过 3 章，产出在 `docs/demo_snapshot_xianxia/` |
 
 ---
 
@@ -321,7 +322,7 @@ python -m src.pipeline --chapter 1
 系统提供两套 UI，共享大部分组件：
 
 - **`web/` · Flask 动态版**：读本地实时 `state/`，轮询刷新。按钮触发 `POST /api/run` 调用 pipeline，LLM 实时跑。需要本地 Python 环境 + API Key。
-- **`docs/` · 静态只读版**：纯 HTML/CSS/JS，GitHub Pages 托管。数据从 `demo_snapshot/` 与 `demo_snapshot_xianxia/` 加载。操作按钮永久 disabled。供公网评估查阅。
+- **`docs/` · 静态只读版**：纯 HTML/CSS/JS，GitHub Pages 托管。数据从 `docs/demo_snapshot*/` 加载（2026-05-11 起三份 snapshot 全部接入）。操作按钮永久 disabled。供公网评估查阅。
 
 两套 UI 的**三面板结构一致**：
 

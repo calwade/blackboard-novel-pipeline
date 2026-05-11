@@ -1,7 +1,8 @@
 /* =========================================================
    Novelforge — STATIC demo UI (GitHub Pages)
    Vanilla JS. No bundler, no framework, no server.
-   Reads files directly from ../demo_snapshot/, ../rules/, ../AGENTS.md.
+   Reads files directly from ./demo_snapshot*/, ./rules/, ./AGENTS.md.
+   (All served under docs/ which is the Pages root.)
    ========================================================= */
 
 'use strict';
@@ -9,15 +10,15 @@
 // ---------- path resolution ----------
 // The UI shows logical paths like `state/chapters/ch001.md` so the mental model
 // matches the design doc (state lives in files). Internally, those paths
-// resolve to files committed in the repo.
+// resolve to files committed in the repo under docs/demo_snapshot*/.
 //
-// SNAPSHOT_BASE is mutable — judges can toggle between demo settings
-// (gangster-HK-1983 / xianxia-ascension) via the segmented control in the
-// static banner. The xianxia folder may not exist yet; see reloadAfterSwitch()
-// for the graceful fallback.
+// SNAPSHOT_BASE is mutable — users can toggle between demo projects
+// (gangster-HK-1983 / xianxia-ascension / gangster 10-chapter long run)
+// via the segmented control in the static banner.
 const DEMO_SETTINGS = [
-  { id: 'gangster', label: '港综 · 1983', base: './demo_snapshot/' },
-  { id: 'xianxia',  label: '仙侠 · 飞升', base: './demo_snapshot_xianxia/' },
+  { id: 'gangster',     label: '港综 · 3 章',    base: './demo_snapshot/' },
+  { id: 'xianxia',      label: '仙侠 · 3 章',    base: './demo_snapshot_xianxia/' },
+  { id: 'gangster-c10', label: '港综 · 10 章长跑', base: './demo_snapshot_gangster_c5_10ch/' },
 ];
 let activeDemo = 'gangster';
 let SNAPSHOT_BASE = DEMO_SETTINGS[0].base;
@@ -25,10 +26,10 @@ const RULES_BASE   = './rules/';
 const AGENTS_PATH  = './AGENTS.md';
 
 function resolvePath(logicalPath) {
-  // `state/chapters/ch001.md`  -> `../demo_snapshot/chapters/ch001.md`
-  // `state/outline.json`       -> `../demo_snapshot/outline.json`
-  // `rules/24-iron-laws.md`    -> `../rules/24-iron-laws.md`
-  // `AGENTS.md`                -> `../AGENTS.md`
+  // `state/chapters/ch001.md`  -> `./demo_snapshot/chapters/ch001.md`
+  // `state/outline.json`       -> `./demo_snapshot/outline.json`
+  // `rules/24-iron-laws.md`    -> `./rules/24-iron-laws.md`
+  // `AGENTS.md`                -> `./AGENTS.md`
   if (logicalPath === 'AGENTS.md') return AGENTS_PATH;
   if (logicalPath.startsWith('state/')) return SNAPSHOT_BASE + logicalPath.slice('state/'.length);
   if (logicalPath.startsWith('rules/')) return RULES_BASE + logicalPath.slice('rules/'.length);

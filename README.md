@@ -251,13 +251,11 @@ novelforge/
 │   ├── c5-10ch-validation-report.md # 港综 10 章长跑验证报告
 │   ├── c10-evaluator-calibration-report.md # Evaluator 三轮校准报告
 │   ├── rules/                       # 和根目录 rules/ 同步（Pages 数据源）
+│   ├── demo_snapshot/               # 港综 3 章产物（Pages 数据源 1）
+│   ├── demo_snapshot_xianxia/       # 仙侠 3 章产物（Pages 数据源 2）
+│   ├── demo_snapshot_gangster_c5_10ch/ # 港综 10 章完整长跑（Pages 数据源 3）
+│   │                                # 三份 snapshot 的 schema 说明见 demo-snapshots.md
 │   └── index.html + main.*          # GitHub Pages 静态演示页
-│
-├── demo_snapshot/                   # 港综 3 章产物 + 账本样本（Pages 数据源 1）
-├── demo_snapshot_xianxia/           # 仙侠 3 章产物 + 账本样本（Pages 数据源 2）
-├── demo_snapshot_gangster_c5_10ch/  # 港综 10 章完整长跑产物
-│                                    # 字段用的是 2026-05-11 重构前的 settings/ schema
-│                                    # 详见 docs/demo-snapshots.md
 │
 ├── tests/                           # 288 个测试用例
 ├── evaluator_calibration/           # Evaluator 校准集（10 case + 3 轮报告）
@@ -334,7 +332,7 @@ python -m pytest tests/ -v
 - `test_rules_and_docs.py` + `test_web_and_pages_sync.py` — 文档即代码（`rules/00` 存在性、AGENTS.md 完整性、`docs/rules` 与 `rules/` 偏离守卫）
 - `test_dashboard_bookkeeping.py` — 质量仪表盘的账本区块渲染
 
-**覆盖策略**：prompt 构造（输入文件清单、必读文件）用单元测试；Agent 输出质量通过端到端运行验证（见 `demo_snapshot*/` 下三个题材的实测产出，尤其 `demo_snapshot_gangster_c5_10ch/` 的 10 章完整小说）。
+**覆盖策略**：prompt 构造（输入文件清单、必读文件）用单元测试；Agent 输出质量通过端到端运行验证（见 `docs/demo_snapshot*/` 下三个题材的实测产出，尤其 `docs/demo_snapshot_gangster_c5_10ch/` 的 10 章完整小说）。
 
 ---
 

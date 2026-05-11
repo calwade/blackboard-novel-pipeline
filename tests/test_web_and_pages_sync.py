@@ -110,16 +110,19 @@ def test_web_main_js_tree_references_bookkeeping_section():
     assert "00-information-priority.md" in text
 
 
-# ---- demo_snapshot sync: each of the two gangster/xianxia snapshots has
-# representative bookkeeping files so Pages viewers see them rendered ----
+# ---- demo_snapshot sync: each of the docs/ snapshots has representative
+# bookkeeping files so Pages viewers see them rendered.
+#
+# Before 2026-05-11 there were duplicate root-level copies too (demo_snapshot/
+# etc.) — those were bit-identical副本 that Pages never read. They've been
+# deleted; only the docs/ copies live on. See docs/demo-snapshots.md for
+# the full explanation.
 
 @pytest.mark.parametrize(
     "snapshot_dir",
     [
         "docs/demo_snapshot",
         "docs/demo_snapshot_xianxia",
-        "demo_snapshot",
-        "demo_snapshot_xianxia",
     ],
 )
 def test_snapshot_has_bookkeeping_sample(snapshot_dir):

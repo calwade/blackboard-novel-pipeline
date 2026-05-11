@@ -1,15 +1,19 @@
-# `demo_snapshot*/` · 静态演示快照
+# `docs/demo_snapshot*/` · 静态演示快照
 
 这些目录是 **GitHub Pages 静态只读版** ([calwade.github.io/novelforge](https://calwade.github.io/novelforge/)) 的数据源。
 每个目录是某次端到端跑完后冻结下来的产物，用于让没装环境的人也能在线看到"这个系统实际产出长什么样"。
+
+> **历史注记**：2026-05-11 之前根目录下也有同名的三份 snapshot——那是 `docs/` 下这三份的 bit-identical 副本。
+> GitHub Pages 从 `main:/docs` 部署，只读 `docs/` 下的文件，根目录那三份从没被读过。
+> 已清理，只保留 `docs/` 下的正本。
 
 ## 三份快照
 
 | 目录 | 题材 | 章数 | 说明 |
 |---|---|---|---|
-| `demo_snapshot/` | 港综 · 1983 | 3 章 | 早期演示版，2 个 Auditor 产物齐全 |
-| `demo_snapshot_xianxia/` | 仙侠 · 飞升 | 3 章 | 切题材演示，展示 `resource_ledger` 切换 |
-| `demo_snapshot_gangster_c5_10ch/` | 港综 · 1983 | 10 章 | 完整长跑，验证 10 章以上的叙事连贯性 |
+| `docs/demo_snapshot/` | 港综 · 1983 | 3 章 | 早期演示版，2 个 Auditor 产物齐全 |
+| `docs/demo_snapshot_xianxia/` | 仙侠 · 飞升 | 3 章 | 切题材演示，展示 `resource_ledger` 切换 |
+| `docs/demo_snapshot_gangster_c5_10ch/` | 港综 · 1983 | 10 章 | 完整长跑，验证 10 章以上的叙事连贯性 |
 
 ## Schema 注意事项（2026-05-11 重构后读的人看这里）
 
@@ -36,8 +40,8 @@ python -m src.bootstrap --project gangster-hk-1983-linjiayao
 # 跑完需要的章节
 python -m src.pipeline --range 1-3
 
-# 然后把 projects/<id>/state/ 目录整体拷出来作为新的 snapshot
-cp -r projects/gangster-hk-1983-linjiayao/state demo_snapshot_v2_linjiayao
+# 然后把 projects/<id>/state/ 目录整体拷到 docs/ 下作为新 snapshot
+cp -r projects/gangster-hk-1983-linjiayao/state docs/demo_snapshot_v2_linjiayao
 ```
 
 注意新生成的 snapshot 里 `setting.yaml` 会是新 schema，Pages UI 会兼容读取。
@@ -45,4 +49,5 @@ cp -r projects/gangster-hk-1983-linjiayao/state demo_snapshot_v2_linjiayao
 ## 千万不要
 
 - 不要修改这些 snapshot 里的章节正文——Pages 静态版的所有样例就是这些文本
-- 不要删掉任何一份 —— README.md、`docs/` 的页脚、以及 `test_web_and_pages_sync.py` 都引用了
+- 不要删掉任何一份 —— README.md、`docs/main.js` 的 `DEMO_SETTINGS`、以及 `test_web_and_pages_sync.py` 都引用了
+- 不要把它们移回根目录 —— Pages 部署自 `main:/docs`，放在根目录 Pages 读不到

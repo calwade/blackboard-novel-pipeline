@@ -2,8 +2,8 @@
 
 Usage:
     python -m src.tools.dashboard                    # use current state/
-    python -m src.tools.dashboard --dir demo_snapshot
-    python -m src.tools.dashboard --dir demo_snapshot_xianxia --out docs/dashboards/xianxia.md
+    python -m src.tools.dashboard --dir docs/demo_snapshot
+    python -m src.tools.dashboard --dir docs/demo_snapshot_xianxia --out docs/dashboards/xianxia.md
 
 Reads:
     <dir>/outline.json
