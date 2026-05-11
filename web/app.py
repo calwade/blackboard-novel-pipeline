@@ -497,44 +497,64 @@ def api_issues():
     return jsonify(_bb().read_jsonl("issues.jsonl"))
 
 
-# ---------- pipeline controls ----------
-def _spawn(target, chapter: int, kind: str):
+# ---------- pipeline run control ----------
+_MODE_DISPATCH = {
+    # mode key            status.kind     pipeline fn (unbound)       takes_chapter
+    "chapter":            ("full",        "run_chapter",              True),
+    "packaging":          ("packaging",   "run_packaging",            False),
+    "plan-only":          ("plan",        "run_plan_only",            True),
+    "write-only":         ("write",       "run_write_only",           True),
+    "evaluate-only":      ("evaluate",    "run_evaluate_only",        True),
+    "fix-only":           ("fix",         "run_fix_only",             True),
+    "audit-only":         ("audit",       "run_audit_only",           True),
+    "bookkeeping-only":   ("bookkeeping", "run_bookkeeping_only",     True),
+}
+
+
+def _parse_range(s: str) -> list[int]:
+    """Parse 'N-M' → [N, N+1, ..., M]. Raises ValueError on bad shape."""
+    if not isinstance(s, str) or "-" not in s:
+        raise ValueError("range must be 'N-M'")
+    try:
+        a, b = s.split("-", 1)
+        a, b = int(a.strip()), int(b.strip())
+    except ValueError:
+        raise ValueError("range must be 'N-M' with integers")
+    if a < 1 or b < a:
+        raise ValueError("range must satisfy 1 <= N <= M")
+    return list(range(a, b + 1))
+
+
+def _spawn_single(target_fn, kwargs: dict, kind: str):
+    """Launch a single-shot pipeline call in a background thread."""
     if not _run_lock.acquire(blocking=False):
         return False
+    pipeline.CANCEL_EVENT.clear()
 
     def _worker():
-        _write_status(
-            {
-                "running": True,
-                "kind": kind,
-                "chapter": chapter,
-                "started_at": time.time(),
-            }
-        )
+        started_at = time.time()
+        _write_status({"running": True, "kind": kind, "started_at": started_at, **kwargs})
         try:
-            result = target(_bb(), chapter=chapter)
-            _write_status(
-                {
-                    "running": False,
-                    "kind": kind,
-                    "chapter": chapter,
-                    "finished_at": time.time(),
-                    "ok": True,
-                    "result": result,
-                }
-            )
+            result = target_fn(_bb(), **kwargs) if kwargs else target_fn(_bb())
+            _write_status({
+                "running": False, "kind": kind,
+                "finished_at": time.time(), "ok": True,
+                "result": result, **kwargs,
+            })
+        except pipeline.PipelineAborted:
+            _write_status({
+                "running": False, "kind": kind,
+                "finished_at": time.time(), "ok": False,
+                "error": "aborted", **kwargs,
+            })
         except Exception as e:
-            _write_status(
-                {
-                    "running": False,
-                    "kind": kind,
-                    "chapter": chapter,
-                    "finished_at": time.time(),
-                    "ok": False,
-                    "error": f"{type(e).__name__}: {e}",
-                    "traceback": traceback.format_exc()[-1200:],
-                }
-            )
+            _write_status({
+                "running": False, "kind": kind,
+                "finished_at": time.time(), "ok": False,
+                "error": f"{type(e).__name__}: {e}",
+                "traceback": traceback.format_exc()[-1200:],
+                **kwargs,
+            })
         finally:
             _run_lock.release()
 
@@ -542,37 +562,119 @@ def _spawn(target, chapter: int, kind: str):
     return True
 
 
-def _chapter_arg() -> int:
-    data = request.get_json(silent=True) or {}
-    raw = request.args.get("chapter") or data.get("chapter")
-    if raw is None:
-        abort(400, "chapter required")
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        abort(400, "chapter must be int")
+def _spawn_range(chapters: list[int]):
+    """Launch a range job: serial run_chapter over each chapter, stop on first failure."""
+    if not _run_lock.acquire(blocking=False):
+        return False
+    pipeline.CANCEL_EVENT.clear()
+
+    def _worker():
+        done: list[int] = []
+        failed = None
+        try:
+            for ch in chapters:
+                _write_status({
+                    "running": True, "kind": "range", "chapter": ch,
+                    "pending": [c for c in chapters if c > ch],
+                    "done": done, "started_at": time.time(),
+                })
+                try:
+                    pipeline.run_chapter(_bb(), chapter=ch)
+                    done.append(ch)
+                except pipeline.PipelineAborted:
+                    failed = {"chapter": ch, "reason": "aborted"}
+                    break
+                except Exception as e:
+                    failed = {
+                        "chapter": ch,
+                        "error": f"{type(e).__name__}: {e}",
+                        "traceback": traceback.format_exc()[-1200:],
+                    }
+                    break
+            _write_status({
+                "running": False, "kind": "range", "done": done,
+                "failed": failed, "finished_at": time.time(),
+                "ok": failed is None,
+            })
+        finally:
+            _run_lock.release()
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return True
 
 
 @app.post("/api/run")
 def api_run():
     if READONLY_MODE:
         return jsonify({"started": False, "reason": "readonly_mode"}), 403
-    ch = _chapter_arg()
-    ok = _spawn(pipeline.run_chapter, ch, kind="full")
-    if not ok:
+    data = request.get_json(silent=True) or {}
+    mode = (data.get("mode") or "").strip()
+
+    # Backward compat: no mode + has chapter → treat as mode=chapter
+    if not mode and "chapter" in data:
+        mode = "chapter"
+
+    # Range is a special case because it iterates; handle separately.
+    if mode == "range":
+        rng = data.get("range")
+        try:
+            chapters = _parse_range(rng) if isinstance(rng, str) else None
+        except ValueError as e:
+            return jsonify({"started": False, "reason": str(e)}), 400
+        if not chapters:
+            return jsonify({"started": False, "reason": "range required, format 'N-M'"}), 400
+        if not _spawn_range(chapters):
+            return jsonify({"started": False, "reason": "pipeline already running"}), 409
+        return jsonify({"started": True, "kind": "range", "chapters": chapters}), 202
+
+    if mode not in _MODE_DISPATCH:
+        return jsonify({"started": False, "reason": f"unknown mode: {mode!r}"}), 400
+
+    kind, fn_name, takes_chapter = _MODE_DISPATCH[mode]
+    target_fn = getattr(pipeline, fn_name)
+
+    kwargs: dict = {}
+    if takes_chapter:
+        ch = data.get("chapter")
+        if ch is None:
+            return jsonify({"started": False, "reason": f"chapter required for mode={mode}"}), 400
+        try:
+            ch = int(ch)
+        except (TypeError, ValueError):
+            return jsonify({"started": False, "reason": "chapter must be int"}), 400
+        kwargs["chapter"] = ch
+
+    if not _spawn_single(target_fn, kwargs, kind=kind):
         return jsonify({"started": False, "reason": "pipeline already running"}), 409
-    return jsonify({"started": True, "chapter": ch, "kind": "full"}), 202
+    return jsonify({"started": True, "kind": kind, **kwargs}), 202
+
+
+@app.post("/api/abort")
+def api_abort():
+    """Set pipeline.CANCEL_EVENT. Worker checks it between stages."""
+    was_running = _run_lock.locked()
+    pipeline.CANCEL_EVENT.set()
+    return jsonify({"ok": True, "aborted": True, "was_running": was_running})
 
 
 @app.post("/api/audit")
 def api_audit():
+    """Thin alias dispatching to audit-only mode. Kept for backward
+    compatibility with the existing frontend's 'Re-run Auditor' button.
+    """
     if READONLY_MODE:
         return jsonify({"started": False, "reason": "readonly_mode"}), 403
-    ch = _chapter_arg()
-    ok = _spawn(pipeline.run_audit_only, ch, kind="audit")
-    if not ok:
+    data = request.get_json(silent=True) or {}
+    ch = data.get("chapter") if data else request.args.get("chapter")
+    if ch is None:
+        return jsonify({"started": False, "reason": "chapter required"}), 400
+    try:
+        ch = int(ch)
+    except (TypeError, ValueError):
+        return jsonify({"started": False, "reason": "chapter must be int"}), 400
+    if not _spawn_single(pipeline.run_audit_only, {"chapter": ch}, kind="audit"):
         return jsonify({"started": False, "reason": "pipeline already running"}), 409
-    return jsonify({"started": True, "chapter": ch, "kind": "audit"}), 202
+    return jsonify({"started": True, "kind": "audit", "chapter": ch}), 202
 
 
 @app.get("/api/status")
