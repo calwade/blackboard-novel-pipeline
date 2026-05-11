@@ -111,6 +111,98 @@ def _resolve_safe(rel: str) -> Path:
     abort(403, "path outside sandbox")
 
 
+# ---------- project / genre management ----------
+@app.get("/api/genres")
+def api_genres():
+    from src import bootstrap
+    import yaml
+    out = []
+    for gid in bootstrap.list_genres():
+        try:
+            gyaml = yaml.safe_load(
+                (config.GENRES_DIR / gid / "genre.yaml").read_text(encoding="utf-8")
+            ) or {}
+        except (OSError, yaml.YAMLError):
+            gyaml = {}
+        out.append({
+            "id": gid,
+            "display_name": gyaml.get("display_name", gid),
+            "genre": gyaml.get("genre"),
+            "era": gyaml.get("era"),
+            "tone": gyaml.get("tone"),
+        })
+    return jsonify({"genres": out})
+
+
+@app.get("/api/projects")
+def api_projects():
+    from src import bootstrap
+    import yaml
+    active = config.get_active_project_id()
+    out = []
+    for pid in bootstrap.list_projects():
+        pyaml_path = config.PROJECTS_DIR / pid / "project.yaml"
+        try:
+            pyaml = yaml.safe_load(pyaml_path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            pyaml = {}
+        out.append({
+            "id": pid,
+            "genre": pyaml.get("genre"),
+            "display_name": pyaml.get("display_name", pid),
+            "has_state": (config.PROJECTS_DIR / pid / "state").exists(),
+            "is_active": (pid == active),
+        })
+    return jsonify({"active": active, "projects": out})
+
+
+@app.post("/api/projects/activate")
+def api_project_activate():
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    data = request.get_json(silent=True) or {}
+    pid = (data.get("id") or "").strip()
+    if not pid:
+        return jsonify({"ok": False, "reason": "id required"}), 400
+    # Refuse if pipeline is running to avoid state mid-flight swap
+    if not _run_lock.acquire(blocking=False):
+        return jsonify({"ok": False, "reason": "pipeline running; try abort first"}), 409
+    try:
+        from src import bootstrap
+        try:
+            result = bootstrap.bootstrap_project(pid)
+        except (FileNotFoundError, ValueError) as e:
+            return jsonify({"ok": False, "reason": str(e)}), 400
+        return jsonify({
+            "ok": True,
+            "active": result.project_id,
+            "genre": result.genre_id,
+            "copied_files": result.copied_files,
+        })
+    finally:
+        _run_lock.release()
+
+
+@app.post("/api/projects/new")
+def api_project_new():
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    data = request.get_json(silent=True) or {}
+    pid = (data.get("id") or "").strip()
+    genre = (data.get("genre") or "").strip()
+    overwrite = bool(data.get("overwrite", False))
+    if not pid or not genre:
+        return jsonify({"ok": False, "reason": "id and genre required"}), 400
+    from src import bootstrap
+    try:
+        project_dir = bootstrap.create_project(pid, genre, overwrite=overwrite)
+    except FileNotFoundError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+    except FileExistsError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 409
+    return jsonify({"ok": True, "project_dir": str(project_dir), "id": pid})
+
+
 # ---------- views ----------
 @app.get("/")
 def index():
