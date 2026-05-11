@@ -22,7 +22,23 @@ from src import config, pipeline
 from src.blackboard import Blackboard
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-bb = Blackboard()
+
+
+def _bb() -> Blackboard:
+    """Fresh Blackboard bound to the CURRENT state dir.
+
+    Cheap (one Path resolve + mkdir). Must not be cached across requests
+    because Web UI can switch projects mid-session.
+    """
+    return Blackboard(root=config.STATE_DIR)
+
+
+def _status_path() -> Path:
+    return config.STATE_DIR / "pipeline_status.json"
+
+
+def _allowed_roots() -> tuple[Path, ...]:
+    return (config.STATE_DIR.resolve(), config.RULES_DIR.resolve())
 
 # READONLY_MODE=1 disables /api/run and /api/audit. For hosted demos where
 # we don't want evaluators to burn LLM budget or trigger concurrent runs.
@@ -30,12 +46,11 @@ READONLY_MODE: bool = os.environ.get("READONLY_MODE", "0") == "1"
 
 # ---------- shared run-lock ----------
 _run_lock = threading.Lock()
-_STATUS_PATH = config.STATE_DIR / "pipeline_status.json"
 
 
 def _write_status(obj: dict) -> None:
     try:
-        _STATUS_PATH.write_text(
+        _status_path().write_text(
             json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8"
         )
     except OSError:
@@ -43,10 +58,11 @@ def _write_status(obj: dict) -> None:
 
 
 def _read_status() -> dict:
-    if not _STATUS_PATH.exists():
+    sp = _status_path()
+    if not sp.exists():
         return {"running": False}
     try:
-        return json.loads(_STATUS_PATH.read_text(encoding="utf-8"))
+        return json.loads(sp.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {"running": False}
 
@@ -58,8 +74,9 @@ def _read_status() -> dict:
 # We also allow requests of the form "state/..." to map to that directory
 # (so Web UI code and existing docs can keep talking about state/ paths
 # regardless of which project is active).
-_ALLOWED_ROOTS = (config.STATE_DIR.resolve(), config.RULES_DIR.resolve())
-_ALLOWED_FILES = (config.PROJECT_ROOT.resolve() / "AGENTS.md",)
+# Allowed roots are resolved at call time via _allowed_roots() so they
+# track the current STATE_DIR (including after project switches).
+_ALLOWED_FILES = (config.PROJECT_ROOT.resolve() / "AGENTS.md",)  # still static
 
 
 def _resolve_safe(rel: str) -> Path:
@@ -69,7 +86,7 @@ def _resolve_safe(rel: str) -> Path:
       - "rules/..."          → RULES_DIR/...
       - "state/..."          → STATE_DIR/... (dynamic, rewrites to active project)
       - "AGENTS.md"          → the one whitelisted project-root file
-      - absolute paths under any _ALLOWED_ROOTS (e.g. already-resolved by UI)
+      - absolute paths under any allowed roots (e.g. already-resolved by UI)
     Anything else → 403.
     """
     if not rel or ".." in Path(rel).parts:
@@ -83,7 +100,7 @@ def _resolve_safe(rel: str) -> Path:
     else:
         candidate = (config.PROJECT_ROOT / rel).resolve()
 
-    for root in _ALLOWED_ROOTS:
+    for root in _allowed_roots():
         try:
             candidate.relative_to(root)
             return candidate
@@ -104,11 +121,11 @@ def index():
 def api_state():
     """Compact snapshot: progress + per-chapter artifact existence + counters."""
     try:
-        progress = bb.read_json("progress.json")
+        progress = _bb().read_json("progress.json")
     except (OSError, json.JSONDecodeError):
         progress = {}
     try:
-        outline = bb.read_json("outline.json")
+        outline = _bb().read_json("outline.json")
     except (OSError, json.JSONDecodeError):
         outline = {"chapters": []}
 
@@ -119,28 +136,28 @@ def api_state():
             {
                 "ch": n,
                 "title": ch_entry.get("title", f"第 {n} 章"),
-                "has_md": bb.exists(f"chapters/ch{n:03d}.md"),
-                "has_plan": bb.exists(f"chapters/ch{n:03d}.plan.json"),
-                "has_verdict": bb.exists(f"chapters/ch{n:03d}.verdict.json"),
-                "has_summary": bb.exists(f"summaries/ch{n:03d}.md"),
-                "has_slop_patch": bb.exists(f"fixes/ch{n:03d}.slop-patch.md"),
-                "has_char_patch": bb.exists(f"fixes/ch{n:03d}.char-patch.md"),
+                "has_md": _bb().exists(f"chapters/ch{n:03d}.md"),
+                "has_plan": _bb().exists(f"chapters/ch{n:03d}.plan.json"),
+                "has_verdict": _bb().exists(f"chapters/ch{n:03d}.verdict.json"),
+                "has_summary": _bb().exists(f"summaries/ch{n:03d}.md"),
+                "has_slop_patch": _bb().exists(f"fixes/ch{n:03d}.slop-patch.md"),
+                "has_char_patch": _bb().exists(f"fixes/ch{n:03d}.char-patch.md"),
             }
         )
 
-    debt_count = len(bb.read_jsonl("debt.jsonl"))
-    issue_count = len(bb.read_jsonl("issues.jsonl"))
-    prompt_count = len(bb.read_jsonl("prompts_log.jsonl"))
+    debt_count = len(_bb().read_jsonl("debt.jsonl"))
+    issue_count = len(_bb().read_jsonl("issues.jsonl"))
+    prompt_count = len(_bb().read_jsonl("prompts_log.jsonl"))
 
     # Bookkeeping artifacts (global, overwrite-style — not per-chapter).
     # Reflects C-23 / C-24 / C-25: StatusCardUpdater, HookKeeper, ResourceLedger.
     # The absence of resource_schema.yaml is a FEATURE (non-numeric settings
     # opt out of the resource ledger), so we surface that explicitly.
     bookkeeping = {
-        "has_status_card": bb.exists("current_status_card.md"),
-        "has_pending_hooks": bb.exists("pending_hooks.md"),
-        "has_resource_schema": bb.exists("resource_schema.yaml"),
-        "has_resource_ledger": bb.exists("resource_ledger.md"),
+        "has_status_card": _bb().exists("current_status_card.md"),
+        "has_pending_hooks": _bb().exists("pending_hooks.md"),
+        "has_resource_schema": _bb().exists("resource_schema.yaml"),
+        "has_resource_ledger": _bb().exists("resource_ledger.md"),
     }
 
     return jsonify(
@@ -196,19 +213,19 @@ def _guess_mimetype(ext: str) -> str:
 @app.get("/api/prompts")
 def api_prompts():
     limit = max(1, min(int(request.args.get("limit", 200)), 1000))
-    rows = bb.read_jsonl("prompts_log.jsonl")
+    rows = _bb().read_jsonl("prompts_log.jsonl")
     rows.reverse()  # newest first
     return jsonify(rows[:limit])
 
 
 @app.get("/api/debt")
 def api_debt():
-    return jsonify(bb.read_jsonl("debt.jsonl"))
+    return jsonify(_bb().read_jsonl("debt.jsonl"))
 
 
 @app.get("/api/issues")
 def api_issues():
-    return jsonify(bb.read_jsonl("issues.jsonl"))
+    return jsonify(_bb().read_jsonl("issues.jsonl"))
 
 
 # ---------- pipeline controls ----------
@@ -226,7 +243,7 @@ def _spawn(target, chapter: int, kind: str):
             }
         )
         try:
-            result = target(bb, chapter=chapter)
+            result = target(_bb(), chapter=chapter)
             _write_status(
                 {
                     "running": False,
