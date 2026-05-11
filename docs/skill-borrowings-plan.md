@@ -2,8 +2,41 @@
 
 > **Source**：`docs/可跑的小说写作-skill.txt`（428 行，作者实战跑过的 skill）
 > **Date**：2026-05-10
+> **Last Update**：2026-05-11（C-22..C-32 全部落地完成后）
 > **方法**：逐段对照 skill 内容 vs 现有系统 + `docs/gap-analysis-post-mvp.md` 清单，识别可借鉴项
 > **与教程贴的根本差异**：教程贴是「思路/原则」级输入；这份 skill 是**可跑的 prompt 工程**，含大量可直接抄进现有 prompt 的语言表达、表格模板、判定规则
+
+---
+
+## 📊 落地状态速览（2026-05-11）
+
+**新增 11 条（C-22..C-32）全部完成 ✅**：
+
+| # | 条目 | 层级 | 完成状态 |
+|---|---|---|---|
+| C-22 | Intent Router | Should | ✅ pipeline.py 5 个 CLI 子命令 |
+| C-23 | Current Status Card + StatusCardUpdater | **Must ⭐⭐** | ✅ 最高价值条目落地 |
+| C-24 | Resource Ledger + schema | Should | ✅ 港综/仙侠有 schema，都市言情刻意不数值化 |
+| C-25 | Pending Hooks + HookKeeper | Should | ✅ C-5 10 章跑验证伏笔真的在"回收" |
+| C-26 | AISlopGuard 疲劳词黑名单 | Must | ✅ |
+| C-27 | Fixer 4 档分级 | Must | ✅ |
+| C-28 | Generator 动笔前 7 问 | Must | ✅ |
+| C-29 | 章节类型分化 | Should | ✅ plan.json.chapter_type + scenes[].advances |
+| C-30 | 设定场景化强制 | Must | ✅ Generator 第 8 条铁律 |
+| C-31 | 黄金三章反馈 | Could | ✅ Planner ch3 特化分支 |
+| C-32 | 风格锁定 prohibited_styles | Should | ✅ 3 个 setting 都声明 |
+
+**升级修订 6 条全部完成**：
+- A-1 Websearch（修订为 FactChecker 按 landmine_13 触发）✅
+- A-5 writing_self_check（从 Planner 侧重开）✅
+- A-9 补 4 条 iron_law（25-28）✅
+- B-1 信息源优先级协议 ✅
+- C-12 Summarizer 多级（按相关性读）✅
+- C-8 质量仪表盘 ✅
+
+**明确不采纳的 2 条维持不变**：无女主路线 / 二十二方起源真界彩蛋
+
+**本 plan 的核心任务已全部完成。后续 skill 再次更新或新发现，可追加到本文档末尾的"第二轮借鉴"小节。**
 
 ---
 
@@ -315,54 +348,58 @@
 
 ## 新增条目（gap-analysis 漏掉的）
 
-| # | 条目 | 层级 | 工时 | 来源 |
-|---|---|---|---|---|
-| **C-22** | Intent Router（任务类型判别） | Should | 8h | skill #1 |
-| **C-23** | Current Status Card（当前状态卡 + StatusCardUpdater Agent） | **Must** | 10h | skill #4 ⭐⭐ |
-| **C-24** | Resource Ledger（资源账本，setting 可选） | Should | 8h | skill #6 |
-| **C-25** | Pending Hooks（伏笔池 + HookKeeper Agent） | Should | 6h | skill #7 |
-| **C-26** | AISlopGuard 疲劳词黑名单 | **Must** | 1.5h | skill #8 |
-| **C-27** | Fixer 修改档分级（润色/改写/重写/续写） | **Must** | 0.5h | skill #10 |
-| **C-28** | Generator 动笔前 7 问 | **Must** | 1h | skill #11 ⭐⭐ |
-| **C-29** | 章节类型分化（战斗/布局/过渡/回收） | Should | 4h | skill #12 |
-| **C-30** | 设定场景化强制（禁百科复述） | **Must** | 0.5h | skill #18 |
-| **C-31** | 黄金三章反馈自检 | Could | 2h | skill #19 |
-| **C-32** | 风格锁定机制（prohibited_styles） | Should | 2h | skill #24 |
+| # | 条目 | 层级 | 工时 | 来源 | 状态 |
+|---|---|---|---|---|---|
+| **C-22** | Intent Router（任务类型判别） | Should | 8h | skill #1 | ✅ |
+| **C-23** | Current Status Card（当前状态卡 + StatusCardUpdater Agent） | **Must** | 10h | skill #4 ⭐⭐ | ✅ |
+| **C-24** | Resource Ledger（资源账本，setting 可选） | Should | 8h | skill #6 | ✅ |
+| **C-25** | Pending Hooks（伏笔池 + HookKeeper Agent） | Should | 6h | skill #7 | ✅ |
+| **C-26** | AISlopGuard 疲劳词黑名单 | **Must** | 1.5h | skill #8 | ✅ |
+| **C-27** | Fixer 修改档分级（润色/改写/重写/续写） | **Must** | 0.5h | skill #10 | ✅ |
+| **C-28** | Generator 动笔前 7 问 | **Must** | 1h | skill #11 ⭐⭐ | ✅ |
+| **C-29** | 章节类型分化（战斗/布局/过渡/回收） | Should | 4h | skill #12 | ✅ |
+| **C-30** | 设定场景化强制（禁百科复述） | **Must** | 0.5h | skill #18 | ✅ |
+| **C-31** | 黄金三章反馈自检 | Could | 2h | skill #19 | ✅ |
+| **C-32** | 风格锁定机制（prohibited_styles） | Should | 2h | skill #24 | ✅ |
 
 **合计新增**：11 条 · Must 5 条（13.5h） · Should 4 条（20h）· Could 1 条（2h）· 其他升级 1 条
+
+**🎉 2026-05-11：11 条全部落地 ✅ · 见 [gap-analysis-post-mvp.md 维度 C 扩展表](gap-analysis-post-mvp.md#维度-c-扩展skill-借鉴新增2026-05)**
 
 ---
 
 ## 推荐借鉴清单（按优先级）
 
-### 🟢 立即借鉴（本周 / 下周融入）
+### 🟢 立即借鉴（本周 / 下周融入）· ✅ 全部完成
 
-1. **C-26 · AISlopGuard 疲劳词黑名单**（1.5h）—— 现成可拿到的黑名单，立即提升 AISlopGuard 精度
-2. **C-27 · Fixer 修改档分级**（0.5h）—— 单段 prompt 修改
-3. **C-28 · Generator 动笔前 7 问**（1h）—— 直接抄进 system prompt
-4. **C-30 · 设定场景化强制**（0.5h）—— 单句 prompt 补充
-5. **A-9 升级 · 4 条新 iron_law**（3h）—— skill 禁止列表直接翻译为新铁律
+1. **C-26 · AISlopGuard 疲劳词黑名单**（1.5h）✅
+2. **C-27 · Fixer 修改档分级**（0.5h）✅
+3. **C-28 · Generator 动笔前 7 问**（1h）✅
+4. **C-30 · 设定场景化强制**（0.5h）✅
+5. **A-9 升级 · 4 条新 iron_law**（3h）✅
 
-**子合计**：6.5h，本周内可全部做完。直接提升质量。
+**子合计**：6.5h · 实际落地 commit `9512db0`。
 
-### 🟡 下周融入（配合 C-5 10 章长跑）
+### 🟡 下周融入（配合 C-5 10 章长跑）· ✅ 全部完成
 
-6. **C-23 · Current Status Card + StatusCardUpdater Agent**（10h）—— 长链路稳定的决定性基础设施
-7. **B-1 升级 · 信息源优先级协议**（3h）
-8. **C-12 细化 · 按相关性读摘要 + 章/弧/全书**（C-23 落地后实现）
-9. **A-5 重开 · Planner 侧 writing_self_check**（3h）
+6. **C-23 · Current Status Card + StatusCardUpdater Agent**（10h）✅ —— 长链路稳定的决定性基础设施
+7. **B-1 升级 · 信息源优先级协议**（3h）✅
+8. **C-12 细化 · 按相关性读摘要 + 章/弧/全书**（C-23 落地后实现）✅
+9. **A-5 重开 · Planner 侧 writing_self_check**（3h）✅
 
-**子合计**：16h，第二周完成。
+**子合计**：16h · 实际落地 commit `1b86923` 等。
 
-### 🔵 第三周及以后
+### 🔵 第三周及以后 · ✅ 全部完成
 
-10. C-29 章节类型分化（4h）
-11. C-24 Resource Ledger（8h，玄幻/系统流题材需要）
-12. C-25 Pending Hooks（6h）
-13. C-32 风格锁定（2h）
-14. A-1 修订 · Evaluator 按需搜索（6h）
-15. C-22 Intent Router（8h，留给 Web UI 对话化阶段）
-16. C-31 黄金三章反馈检（2h）
+10. C-29 章节类型分化（4h）✅
+11. C-24 Resource Ledger（8h，玄幻/系统流题材需要）✅
+12. C-25 Pending Hooks（6h）✅
+13. C-32 风格锁定（2h）✅
+14. A-1 修订 · Evaluator 按需搜索（6h）✅ —— commit `bad8eea` FactChecker
+15. C-22 Intent Router（8h）✅
+16. C-31 黄金三章反馈检（2h）✅
+
+**全部完成。剩余可能的二轮借鉴机会见文档末尾（留空备用）。**
 
 ---
 

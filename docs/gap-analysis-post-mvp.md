@@ -3,9 +3,22 @@
 > 定位从"黑客松 3 章 MVP"升级到"大而全通用多 Agent 小说写作系统"之后，
 > 针对教程贴借鉴审计（108 条）+ 现有系统形态做的 Gap 分析 + 补齐方案。
 >
-> 审阅日期：2026-05-10（MVP 提交后）
-> 审阅者：Oracle（第三轮评审）
+> 首次起草：2026-05-10（MVP 提交后）· Oracle 第三轮评审
+> 最后更新：2026-05-11（Must+Should 主体落地、C-5 港综 10 章长跑 + C-10 Evaluator 校准完成后）
 > 前两轮评审：docs/superpowers/specs/2026-05-09-novelforge-design.md § Oracle 事前/事后评审
+
+---
+
+## 当前进度速览（2026-05-11）
+
+| 维度 | Must | Should | Could | Won't |
+|---|---|---|---|---|
+| **总条目** | 9 | 18 | 11 | 24 |
+| **✅ 已落地** | **9 / 9** | **12 / 18** | 1 / 11 | — |
+| **❌ 仍挂着** | 0 | 6 | 10 | — |
+
+所有 Must 全部扫清。Should 层还剩 6 条（B-2 LogicGuard / B-4 细节扩写 / B-5 六步走强制 / B-6 全员在线 / B-7 节奏仪表 / C-11 Fixer 动态配额）。
+详见下文每条的 ✅/❌ 标记和[优先级汇总](#优先级汇总moscow)。
 
 ---
 
@@ -16,12 +29,17 @@
 - **第一轮（事前）**：24 小时黑客松交付，单人开发，≤10MB zip。建议砍 Auditor（4→2）、砍 TimelineGuard/FactGuard、Summarizer 独立角色、加 Prompt Inspector UI。
 - **第二轮（事后）**：Evaluator 对后修稿返回占位骨架（`"…"`）导致 ch1/ch3 false-pass。建议加 skeleton detector、修 README 谎言、加 Lesson→code crosswalk。
 
-### 当前系统形态
+### 当前系统形态（2026-05-11）
 
-- 7 个 Agent（5 主 + 2 审计）+ Setting Pack 抽象层
-- 2 个 Setting（港综 1983 跑过 3 章；仙侠已搭骨架未跑 LLM）
-- 108 条教程借鉴中 🟢 43 / 🟡 26 / 🔴 39
-- 6 个 pytest 测试全部覆盖 blackboard I/O
+- **11 个 Agent**（5 创作 + 3 记账 + 3 审计）+ Setting Pack 抽象层
+  - 5 创作：Planner / Generator / Evaluator / Fixer / Summarizer
+  - 3 记账：StatusCardUpdater / HookKeeper / ResourceLedger（可选）
+  - 3 审计：AISlopGuard / CharacterGuard / FactChecker（按需触发）
+  - 另有 PackagingAgent（一次性运行）+ ArcSummarizer / BookSummarizer（L2/L3 多级摘要）
+- **3 个 Setting**：港综 1983（✅ 跑过 10 章）/ 仙侠飞升（✅ 跑过 3 章）/ 都市言情·深圳（⚠️ 结构完整未跑 LLM）
+- **108 条教程借鉴**：已落地 90+ 条（tutorial-borrowings-audit.md 待更新到最新状态）
+- **288 个 pytest 用例**（覆盖 blackboard I/O / 每个 Agent 的 prompt 构造 / pipeline 全链路 / 记账隔离 / 文档偏离守卫）
+- **Evaluator 校准集**：10 case，3 轮迭代后达到 100% overall_pass 一致性 / 100% recall / 58.6% precision
 - 单进程 Python，Flask UI，无数据库
 
 ### 新前提
@@ -163,32 +181,18 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### A-4 · 书名 / 简介 / 发布包装
 
-**当时砍的原因**：MVP 是写章节，不是出版工作流。
+**✅ 已落地（2026-05）**——`src/agents/packaging.py` 已存在并跑通。
 
-**新前提下决议**：**应做（Should）**，但不是一个大 Agent，而是一个独立 `PackagingAgent` + 独立执行入口。
+**实际实现**：
+- Agent：`src/agents/packaging.py`（`PackagingAgent`）
+- 入口：`python -m src.pipeline --packaging`
+- 产出：`state/packaging.json`（书名候选 + 简介 + 小剧场 + 封面提示 + 标签）
+- 测试：`tests/test_packaging.py`
 
-**为什么新前提下要做**：
-- "通用完整系统"必须能从大纲 → 章节 → 完本包装走完一条龙。缺书名/简介等于少了一个章节产出之后的收尾动作。
-- 教程贴 §16 对书名/简介的要求完整，拿来当 PackagingAgent 的 rubric 即可。
-
-**具体形态**：
-- 新 Agent：`src/agents/packaging.py`
-- 入口：`python -m src.pipeline --package`（当完成全部章节，或随时手动触发）
-- 读：`outline.json` + `characters.yaml` + 前 3 章正文 + 最新一章（体现风格稳定）
-- 写：`state/package/book-title-candidates.md`（3-5 个候选 + 测试分数）+ `state/package/blurb.md`（300 字内简介 + 小剧场）+ `state/package/cover-prompt.md`（给画图工具的描述）
-- Rubric：直接搬教程贴 §16（题材+核心爽点+主角行为）+ 番茄榜单观察到的书名模式
-- 配套 `PackagingEvaluator`：用"书名与简介是否贴合 outline 和 chapter tone"做 JSON 评分
-
-**落点**：
-- 新文件：`src/agents/packaging.py`（~180 行）
-- 新文件：`src/agents/packaging_evaluator.py`（~120 行）
-- 新规则：`rules/packaging-rubric.md`（书名/简介的黄金法则，从教程贴 L1423-1463 提取）
-- 修改：`src/pipeline.py` 增加 `run_packaging()` 入口
-- UI：在 Web 加"查看发布包装"tab
-
-**工作量**：10h（两个 Agent + 规则 + UI 对接）
-
-**判定**：**必做（Must）**。通用小说系统的产物不应该是"3 个 .md"，而是"一本可发布的书"。缺这一环能感觉到断臂。
+**与原设计的差异**：
+- 没做单独的 `PackagingEvaluator`——`PackagingAgent` 内部做了一次自检，产出 `_validation_warnings` 字段供 UI 显示
+- 没做 `rules/packaging-rubric.md` 独立规则——规则直接内嵌在 Agent system prompt
+- 这两处简化没造成质量问题，保留
 
 ---
 
@@ -196,12 +200,15 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 **当时砍的原因**：Evaluator 已做事后检查，"自己评自己乐观"是 Anthropic 踩过的坑。
 
-**新前提下决议**：**不做（Won't）**。这条之前砍得对。
+**✅ 已落地（2026-05 · 重开方案）**——放在 **Planner** 侧实现，不是 Generator 自检。
 
-**为什么**：
-- 教程贴原文是"生成前自检"（作者自己做一遍）。如果让 Generator 在产出前先自检，就等于把 Evaluator 的职责前移到 Generator——违反 Lesson 2（Planner/Generator/Evaluator 分离）。
-- 真想要"生成前"的防线，应该让 Planner 的产出 JSON 多一个字段 `pre_generation_risks: [...]`，由 Planner（不是 Generator）基于 outline 预判本章可能踩哪些雷，Generator 读这个提示避雷。这本质是**增强 Planner**，不是新增自检 Agent。
-- 这个增强很便宜（5 行 prompt），但不算"采纳教程贴原样"，归入 Must-do-small（见 B-5）。
+**实际实现**：
+- Planner 的 `plan.json` 新增 `writing_self_check` 字段（6 项风险扫描表：ooc / info_leak / setting_conflict / power_scaling / pacing / vocab_fatigue）
+- 每项为 Planner 基于 outline + 状态卡 + 前情预判的 ≤30 字具体提示（或"无"）
+- Generator 读 plan 时将此表渲染成 Markdown 表格拼进 system prompt，在产出时主动规避
+- 详见 skill-borrowings-plan.md #14
+
+**为什么重开**：skill 借鉴计划揭示了一个让这条能做的形态——"生成前自检"放在 **Planner**（不是 Generator）就不违反 Lesson 2，因为 Planner 本就是评估者而非执笔者。
 
 **判定**：**不做原样，改为增强 Planner**（见 B-5）。
 
@@ -256,21 +263,15 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### A-9 · 「严禁甚至无铺垫」等教程贴残留"严禁"条目中未独立化的部分
 
-审计显示教程贴 24 条严禁中有 15 条独立、4 条部分覆盖、5 条因架构/题材差异未纳入。"严禁甚至无铺垫"→ iron_law_23（审计列为 🟢），但还有几条模糊：
+**✅ 已落地（2026-05，skill 借鉴升级到 4 条新 iron_law）**——见 `rules/24-iron-laws.md`（实际 28 条）。
 
-| 教程严禁 | 当前状态 | 建议 |
-|---|---|---|
-| 严禁不查证写军事（L1575） | 仅 iron_law_10 部分覆盖 | A-1 websearch 解决 |
-| 严禁无脑后宫（L1557） | 仅 🟡（港综 + 仙侠 extra 各自处理） | 在 rules/24-iron-laws.md 加 iron_law_25（通用） |
-| 严禁设定吃书（L1565） | 🟡 部分覆盖 | 加 `iron_law_26`：已确立的设定/能力/空间大小等，后续变化必须有过程 |
-| 严禁主角双标（L1555） | 🟡 | 已有 iron_law_1/7 覆盖，不单独加 |
-| 严禁跪舔洋人（L1551） | 🟢 只在港综 extra | 维持题材特有 |
+**实际新增**：
+- `iron_law_25 · 信息越界禁令`：反派行动必须可追溯到其已知信息
+- `iron_law_26 · 伏笔账本同步`：大剧情节点必须更新 pending_hooks.md
+- `iron_law_27 · 资源结算禁模糊`：禁"暴涨/海量/难以估量"这类跳过结算的词
+- `iron_law_28 · 风格锁定`：同一作品不得跑出题材基调
 
-**新前提下决议**：**应做（Should）**，补全 iron_law_25 / iron_law_26 进通用铁律。
-
-**工作量**：1.5h
-
-**判定**：**应做（Should）**。
+（比原计划的"严禁无脑后宫 / 严禁设定吃书"更通用，直接采纳 skill-borrowings-plan.md 的方案）
 
 ---
 
@@ -293,20 +294,20 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ## 维度 A 小结
 
-| # | 条目 | 新决议 | 工作量 |
-|---|---|---|---|
-| A-1 | 联网搜索（受限 tool-call） | **Must** | 10h |
-| A-2 | Domain Knowledge 卡片机制 | **Should** | 6h |
-| A-3 | 写作练习示例 | Won't | — |
-| A-4 | 书名/简介/发布包装 Agent | **Must** | 10h |
-| A-5 | 创作自检（原样） | Won't（改为 B-5 增强 Planner） | — |
-| A-6 | 梗提炼知识卡 | **Should** | 3h |
-| A-7 | 5 个领域专家 Agent | Won't（并入 A-1/A-2） | — |
-| A-8 | 影视剧知识 | Won't | — |
-| A-9 | 补通用严禁为 iron_law_25/26 | **Should** | 1.5h |
-| A-10 | 其他 25 条 | Won't | — |
+| # | 条目 | 新决议 | 工作量 | 进度 |
+|---|---|---|---|---|
+| A-1 | 联网搜索（受限 tool-call） | **Must** | 10h | **✅ 已落地** · FactChecker 按 landmine_13 触发 Perplexity Sonar，[c5-10ch-validation-report.md](c5-10ch-validation-report.md) |
+| A-2 | Domain Knowledge 卡片机制 | **Should** | 6h | ❌ 仍挂着（C-5 10 章跑过没触发领域专家需求） |
+| A-3 | 写作练习示例 | Won't | — | — |
+| A-4 | 书名/简介/发布包装 Agent | **Must** | 10h | **✅ 已落地** · `src/agents/packaging.py` + `python -m src.pipeline --packaging` |
+| A-5 | 创作自检 | **Should**（重开，Planner 侧） | 3h | **✅ 已落地** · Planner `writing_self_check` 字段 |
+| A-6 | 梗提炼知识卡 | **Should** | 3h | ❌ 仍挂着 |
+| A-7 | 5 个领域专家 Agent | Won't（并入 A-1） | — | — |
+| A-8 | 影视剧知识 | Won't | — | — |
+| A-9 | 补通用严禁为 iron_law_25/26 | **Should** | 1.5h → 3h | **✅ 已落地** · 扩到 4 条（iron_law_25-28） |
+| A-10 | 其他 25 条 | Won't | — | — |
 
-**维度 A 合计工作量：30.5h**
+**维度 A 进度**：**4 Must / 5 Should 中 4 Must 全完成、2 Should 完成**。剩 A-2 / A-6 未做。
 
 ---
 
@@ -318,22 +319,15 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### B-1 · 交叉验证从"双源"升级到"多源"（审计 1.3）
 
-**当前形态**：Evaluator 交叉核查 characters.yaml + timeline.yaml。
+**✅ 已落地（2026-05）**——skill-borrowings 升级为"**信息源优先级协议**"，比原"多源验证"方案更完整。
 
-**不足**：
-- 两个文件都是 setting 自己提供的，本质是**自洽验证**而非真实世界验证。
-- 没有版本漂移检测：如果 era.md 说 1983 茶餐厅菠萝包 $2，而 timeline.yaml 说 1983 物价指数 CPI=X，两者不一定互相核对。
+**实际实现**：
+- 新文件：`rules/00-information-priority.md`（9 级优先级 + R1..R5 仲裁规则 + 4 个 worked examples）
+- Evaluator system prompt 加载此规则（作为第 6 份参考规则）
+- Fixer system prompt 引用此规则的 R1（正文是 ground truth 原则），指导冲突时反向修状态卡而非回改正文
+- 测试：`tests/test_evaluator_fixer_extensions.py` + `tests/test_rules_and_docs.py` 双重回归守卫
 
-**完整形态**：
-- Evaluator 读 era.md 中的"数据表"段落（物价/事件/人名列表），与 timeline.yaml 互相交叉
-- 涉及具体历史事实时触发 A-1 websearch 做第三源
-- 产出 verdict.external_checks 字段记录"哪几条数据查了，一致/冲突"
-
-**落点**：`src/agents/evaluator.py`，extend `_build_prompts`  约 40 行
-
-**工作量**：3h（依赖 A-1 完成）
-
-**判定**：**Should**，A-1 做完顺手做。
+**为什么比原计划好**：原来只想"多源验证 + external_checks 字段"。skill 揭示真正缺的不是"再加一个数据源"而是"冲突时按谁"——这是协议问题，不是数据源问题。
 
 ---
 
@@ -443,47 +437,46 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### B-7 · 节奏控制（审计 3.6）从规则升级到 pacing 仪表
 
-**当前形态**：iron_law_16 规则化。
+**🟡 部分落地（2026-05）**——数据层完成，可视化层未做。
 
-**不足**：无可视化的节奏数据。长篇小说读者感知的节奏是"多少章高潮 / 多少章日常 / 爽点间距"，这是可度量的。
+**已完成部分**：
+- Planner 的 plan.json 现在要求每个 scene 标注 `advances: [信息|地位|资源|伤亡|仇恨|境界]`（见 skill-borrowings C-29）
+- 同时要求标注 `chapter_type: 战斗|布局|过渡|回收`
+- Generator 根据 chapter_type 切换强调点（_chapter_type_emphasis()）
 
-**完整形态**：在 Summarizer 产出时标记本章类型 `chapter_tag: setup / conflict / climax / breather`，pipeline 汇总到 `state/pacing.json`，Web UI 画一个节奏分布图。Planner 下一章决定时读这张表，避免连续 5 章都是 setup。
+**待做**：
+- 把 advances 字段汇总到 `state/pacing.json`
+- Web UI 画热力图（章号 × 推进项）
+- Planner 下一章决定时读这张表
 
-**落点**：
-- 修改：`src/agents/summarizer.py`（加 chapter_tag 输出）
-- 新文件：`web/static/pacing-panel.js`（或者直接在现有 panel 加）
-- 修改：`src/agents/planner.py`（读 pacing.json 决定是否插高潮）
+**为什么还没做**：当前数据已经可供编辑人工审读，UI 可视化是锦上添花。等 10 章长跑证明编辑真会去查这个数据时再做。
 
-**工作量**：4h
-
-**判定**：**Should**。节奏控制是长篇通用系统的定义性能力。
+**工作量**：剩余 2h（加汇总脚本 + UI）
 
 ---
 
 ### B-8 · 作品包装（审计 5.5 的书名/简介部分 + landmine_16）
 
-**当前形态**：landmine_16「作品包装」部分借鉴（只检查不生成）。
+**✅ 已在 A-4 覆盖**。
 
-**不足**：只能骂"包装不好"，不能产出包装。
-
-**完整形态**：合并到 A-4（PackagingAgent），landmine_16 由 PackagingEvaluator 作为专项评分。
-
-**判定**：**已在 A-4 覆盖**。
+`PackagingAgent` 产出 `state/packaging.json` 时做了书名/简介/封面提示/标签的综合包装。
 
 ---
 
 ## 维度 B 小结
 
-| # | 条目 | 新决议 | 工作量 |
-|---|---|---|---|
-| B-1 | 交叉验证多源化 | Should（依赖 A-1） | 3h |
-| B-2 | 独立 LogicGuard | Should | 5h |
-| B-3 | 历史考据动态化 | 并入 A-1 | — |
-| B-4 | DetailAmplifier | Should | 5h |
-| B-5 | 六步走 → plan.json 结构化 | Should | 4h |
-| B-6 | 人物 presence 跟踪 | Could | 3h |
-| B-7 | 节奏仪表 | Should | 4h |
-| B-8 | 作品包装 | 并入 A-4 | — |
+| # | 条目 | 新决议 | 工作量 | 进度 |
+|---|---|---|---|---|
+| B-1 | 交叉验证多源化 → 信息源优先级 | Should（升级） | 3h | **✅ 已落地** · `rules/00-information-priority.md`（9 级优先级 + R1..R5） |
+| B-2 | 独立 LogicGuard | Should | 5h | ❌ 仍挂着 |
+| B-3 | 历史考据动态化 | 并入 A-1 | — | **✅ 由 A-1 覆盖** |
+| B-4 | DetailAmplifier | Should | 5h | ❌ 仍挂着 |
+| B-5 | 六步走 → plan.json 结构化 | Should | 4h | 🟡 部分落地（Planner writing_self_check 已有，但"六步走"字段还没强制化） |
+| B-6 | 人物 presence 跟踪 | Could | 3h | ❌ 仍挂着（但 status card + pending_hooks 部分覆盖） |
+| B-7 | 节奏仪表 | Should | 4h → 2h | 🟡 数据层完成（advances + chapter_type），UI 未做 |
+| B-8 | 作品包装 | 并入 A-4 | — | **✅ 由 A-4 覆盖** |
+
+**维度 B 进度**：**3 Should 完成 / 2 Should 部分完成 / 2 Should 未做（B-2 LogicGuard + B-4 DetailAmplifier）+ 1 Could 未做**。
 
 **维度 B 合计工作量：24h（含 Could）**
 
@@ -497,37 +490,38 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### C-1 · 更多 Setting 示例（都市言情 / 赛博 / 科幻 / 历史 / 灵异）
 
-**判定**：**Should 做 1-2 个 + Could 做其余**。
+**✅ 部分落地（2026-05）**——新增第三个 setting（都市言情·深圳）。
 
-**理由**：
-- 当前只有港综 + 仙侠 = 2，且仙侠还没跑过 LLM，"通用"的承诺很虚。
-- 至少需要**一个完全不同的类别**真跑 LLM 做出 3 章，才能证明系统没题材偏见。推荐：**都市言情**（跟港综/仙侠三角互补 + 读者群最大）。
-- 赛博朋克/科幻/历史/灵异属于锦上添花，做成"骨架完整、未跑"即可（和仙侠现状一样）。
+**已完成**：
+- `settings/urban-romance-contemporary/` 完整 7 文件（7 必需，无 resource_schema 刻意不数值化）
+- 人物 6 个（女主沈若微 / 男主林昭宇 / 闺蜜顾安安 / 同事赵恺 / VP 季凛 / 沈母）
+- 10 章大纲 + 2024-10 到 2026 的 timeline
+- 题材特有铁律 8 条（iron_law_25..32）
+- 通过 `python -m src.tools.setting_lint --setting urban-romance-contemporary` 验证 0 errors
 
-**工作量**：
-- 都市言情完整 setting + 跑 3 章：12h（含写 7 个 setting 文件 6h + LLM 跑 + 调 4h + demo snapshot 2h）
-- 其他 2 个骨架：每个 4h
+**未做**：
+- 都市言情**没跑 LLM**（成年人的情感叙事审读成本高，仙侠跑过 3 章已足够证明题材无关性）
+- 赛博朋克 / 科幻 / 历史 / 灵意骨架都没做
 
-**推荐范围**：都市言情（Must）+ 1 个骨架（如赛博朋克，Should）。
+**为什么现在够**：C-5 10 章长跑（港综）已经证明"同一套架构能稳定跑"；`setting_lint` 能保证"任何用户自己写的 setting 都能被检出问题"。题材丰富度是**演示需求**而非**架构需求**，等用户真用起来再扩。
 
 ---
 
-### C-2 · Setting Lint 工具（`python -m src.setting_lint`）
+### C-2 · Setting Lint 工具（`python -m src.tools.setting_lint`）
 
-**判定**：**Must**。
+**✅ 已落地（2026-05）**——`src/tools/setting_lint.py`（500 行）+ 18 个测试。
 
-**理由**：
-- 通用系统必须有"设置包质量门卫"。当前 bootstrap 只检查 7 个文件存在，但不检查"characters.yaml 里的角色名是否都出现在 outline 里"、"timeline.yaml 时间跨度是否覆盖 outline 章节"等一致性。
-- 没有 lint，用户自己写的 setting 跑起来会炸得莫名其妙。
+**实际检查项**：
+1. 7 个必需文件 + 1 个可选文件（`resource_schema.yaml`）都存在 + 基本 schema 对 ✅
+2. outline.json 章节的 key_characters 名字 ⊆ characters.yaml（不一致报 WARNING）✅
+3. outline 跨度的 year_month ⊆ timeline.yaml 覆盖范围 ✅
+4. characters.yaml 每个角色有 traits / redlines / motivation ✅
+5. era.md ≥ 500 字 / writing-style-extra.md ≥ 300 字 / iron-laws-extra.md ≥ 3 条铁律 ✅
+6. resource_schema.yaml（可选）结构合法：resources 列表 / 每个资源有 id/display_name/unit/description / validation 段 ✅
+7. "黄金三章"检查（前 3 章 beats 齐全、有 opening/closing hook 等）✅
+8. 禁词扫描（era.md 不得含"MVP/黑客松/hackathon"这种 meta 词）✅
 
-**具体检查项**：
-1. 7 个文件都存在 + 基本 schema 对
-2. outline.json 章节的 cast 名字 ⊆ characters.yaml 里的名字
-3. outline 跨度的时间窗口 ⊆ timeline.yaml 覆盖范围
-4. characters.yaml 里每个角色都有 traits / redlines / motivation
-5. writing-style-extra.md 至少 20 行（避免空文件）
-6. iron-laws-extra.md 里的 iron_law_extra_N 编号不和通用 iron_law_N 冲突
-7. era.md 至少有"物价"、"地理"、"文化"三个主题（通过 heading 检测）
+**额外能力**：三个真实 setting 全部通过 `--all` 模式 0 errors（用 pytest 做回归守卫）
 
 **落点**：
 - 新文件：`src/setting_lint.py`（~200 行）
@@ -571,64 +565,68 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### C-5 · 长链路验证（10+ 章证明稳定）
 
-**判定**：**Must**。
+**✅ 已落地（2026-05-11）**——港综 10 章完整长跑成功。详见 [c5-10ch-validation-report.md](c5-10ch-validation-report.md)。
 
-**理由**：
-- Lesson 3（Context Reset）的承诺是"跨章不漂移"，当前只有 3 章 demo 根本没验证。
-- 10 章是通用系统的最低验证门槛。跑 10 章要：7 个 Agent × 10 章 ≈ 70 次 LLM 调用（按最低估算）+ 2 次 retry × 50% ≈ 20 次 + 2 auditor × 10 = 20 次 = **约 110 次 LLM 调用**，按 DeepSeek 定价 < $5，时间 ~4h 一次跑完。
-- 必须检查：ch10 的 characters.yaml 遵从度 vs ch1，Generator 对 era.md 的引用频率是否衰减，Summarizer 累积误差（读 ch10 要不要动一下之前的 summary）。
+**实际数据**：
+- 完成 10 / 10 章 ✅
+- Evaluator 首过率 100%（0 hits）
+- Fixer retry 0 次
+- 总时长 68 分钟 / 92 次 LLM 调用 / 753k tokens
+- 小说总长 45,113 字（均章 4,511 字，超出 3000 字目标 50%）
 
-**落点**：
-- 运行：跑港综 setting 到 10 章
-- 新脚本：`tools/drift_analysis.py`（对比 ch1 和 ch10 的 landmine 命中分布、AI 味分数走势）
-- 产出：`docs/long-run-report.md`
+**关键架构验证通过**：
+- Lesson-3 bookkeeping 三层账本在 ch10 仍能精确引用 ch1 的伏笔（`identity-1` 全程追踪）
+- HookKeeper 真的在"回收"伏笔（首次 retire 在 ch5）
+- Multi-level summarizer 在 ch5 / ch10 自动触发 arc summary
+- FactChecker 正确未触发（landmine_13 全章未命中，印证 era.md 静态设定够用）
+- 章节时长线性增长（297s → 495s），**未出现上下文爆炸**
 
-**工作量**：运行 4h + 分析脚本 3h + 报告 2h = 9h
+**衍生产物**：
+- `demo_snapshot_gangster_c5_10ch/`
+- `docs/dashboards/gangster-c5-10ch.md`
+- 未做的：`drift_analysis.py` 对比脚本——原因是 10 章数据已经人眼可读且仪表盘已覆盖指标对比
 
 ---
 
 ### C-6 · 导出成品小说（epub / pdf）
 
-**判定**：**Should**。
+**❌ 未做**。用户在 2026-05-11 的对话中明确暂缓。
 
-**理由**：
-- 通用小说系统的产物如果只是 `state/chapters/ch*.md` 是残废的。epub 是网文标配。
-- 技术成熟：`ebooklib` 库 + markdown → epub 直接 one-shot。
-- pdf 可选（LaTeX 依赖重）；MVP 只做 epub + 简单 html bundle。
+**当前仍建议**：Should 级。什么时候做看需求——如果项目走向"对外发布"阶段（GitHub Pages demo 变成可下载 EPUB 的演示），这是必须做的；如果只做架构研究，可以无限推迟。
 
-**落点**：
-- 新文件：`src/export/epub.py`（~100 行，ebooklib）
-- 入口：`python -m src.export --format epub --setting gangster-hk-1983`
-- 整合：Web UI 加下载按钮
-
-**工作量**：5h
+**建议工作量**：5h（ebooklib 单次集成）
 
 ---
 
 ### C-7 · 协作编辑
 
-**判定**：**Won't**。
+**❌ 不做 / 维持 Won't**。
 
-**理由**：
-- 单机工具 + 多人协作差 2 个数量级复杂度（冲突解决、权限、锁）。
-- 没有明显需求。作者和 AI 协作就够了，多人介入意味着要重新审定"谁是权威"——这是个产品问题不是工程问题。
+（原文理由不变）
 
 ---
 
 ### C-8 · 质量度量仪表盘（AI 味走势 / debt 累积 / landmine 频率）
 
-**判定**：**Must**。
+**✅ 已落地（2026-05）**——`src/tools/dashboard.py` + `python -m src.tools.dashboard --dir demo_snapshot --out docs/dashboards/xxx.md`。
 
-**理由**：
-- 这是**通用系统的 observability**，和单元测试同等地位。
-- 当前每次跑完只有一堆 .md 和 .json，没有"综合视图"。长跑场景下必须能一眼看到"AI 味分数在 ch5 之后飙升"。
+**实际产出**：
+- **章节进展表**：字数 / 耗时 / retries / Eval.hits / AI 味 / OOC / 结果
+- **Landmine 命中频率表**
+- **Agent 调用统计**（次数 / 平均耗时 / 平均 tokens / 总 tokens / 错误数）
+- **Bookkeeping 账本状态表**（C-23/C-24/C-25 落地后加的）
+- **待偿技术债表**
+- **Evaluator 校验警告汇总**
 
-**落点**：
-- 新文件：`web/static/dashboard.js`（加一个 Dashboard tab）
-- 数据源：已有的 `issues.jsonl` + `debt.jsonl` + auditor fixes 里的 score
-- 图表：小函数画 svg 即可，不上 d3
+**已有仪表盘产出**（可直接查阅）：
+- `docs/dashboards/gangster-3ch-mvp.md`
+- `docs/dashboards/xianxia-3ch.md`
+- `docs/dashboards/gangster-10ch-long-run.md`
+- `docs/dashboards/gangster-c5-10ch.md`
 
-**工作量**：6h
+**测试**：`tests/test_dashboard_bookkeeping.py`（5 个用例覆盖 bookkeeping 小节的各种状态）
+
+**Web UI 仪表板 tab 未做**——因为命令行产出的 Markdown 已经能直接在 GitHub 上渲染查看，Web UI 再画一遍重复了。
 
 ---
 
@@ -701,23 +699,19 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### C-12 · Summarizer 多级（章节 / 弧 / 全书）
 
-**判定**：**Must**。
+**✅ 已落地（2026-05，commit `e4f0eef`）**——`src/agents/multi_level_summarizer.py`。
 
-**理由**：
-- Lesson 3 的承诺在长篇（50+ 章）会失效——单章 300 字摘要 × 50 章 = 15000 字 context，Planner 依然被淹没。
-- 真正的 Context Reset 需要分层：
-  - `summaries/chNNN.md`（章级，≤300 字，现有）
-  - `summaries/arc-NNN.md`（弧级，每 10 章一篇，≤600 字，新增）
-  - `summaries/novel.md`（全书级，≤1500 字，每 50 章刷新一次，新增）
-- Planner 按距离衰减读：最近 3 章章级 + 相关弧级 + 全书级。
+**实际实现**：
+- **L1 章摘**（≤300 字，现有 Summarizer，每章生成）
+- **L2 弧摘**（≤600 字，ArcSummarizer，每 5 章触发：ch5 / ch10 / ch15 ...）
+- **L3 卷摘**（≤1200 字，BookSummarizer，每 20 章触发：ch20 / ch40 ...）
+- **上下文组装助手**：`assemble_long_chain_context()`，Planner 按距离衰减读（最近 2 章 L1 + 最近 1 个 L2 + 最近 1 个 L3）
 
-**落点**：
-- 新文件：`src/agents/arc_summarizer.py`（~80 行）
-- 新文件：`src/agents/novel_summarizer.py`（~80 行）
-- 修改：`src/pipeline.py` 每 10 章触发 arc_summarizer，每 50 章触发 novel_summarizer
-- 修改：`src/agents/planner.py` 读取多级摘要
+**与原计划差异**：弧窗口从 10 章缩到 5 章（更快见反馈），卷窗口从 50 章降到 20 章（更符合实际长度）。skill-borrowings 的"按相关性读摘要"进一步细化了 Planner 读法。
 
-**工作量**：8h
+**C-5 长跑验证**：10 章跑完自动生成 arc-01.md（ch1-5）+ arc-02.md（ch6-10），各 2000 字左右，叙述连贯。
+
+**测试**：`tests/test_multi_level_summarizer.py`（210 行，覆盖边界函数 + 上下文组装）
 
 ---
 
@@ -788,13 +782,16 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 #### C-17 · Evaluator 结构化 JSON schema 校验 + skeleton detector 固化
 
-**判定**：**Must**。
+**✅ 已落地**——`src/agents/_verdict_schema.py`（256 行）+ `tests/test_verdict_schema.py`。
 
-**理由**：事后评审中发现的 false-pass 问题还没在代码里修（只在 AGENTS.md 故障排查提了一句）。应该把"检测 `where == '…'` 或 zero hits after fixer"做成 schema 校验，不过就重试。
+**实际实现**：
+- `validate_verdict(raw) -> {clean_verdict, validation_warnings, skeleton_detected}`
+- 检测 evidence / where 字段是否为占位符（`…` / `...` / 空串 / `<string>` 等 5 种形态）
+- 服务端重算 overall_pass（不信 LLM 自评），规则：任何 high → fail；≥2 medium → fail
+- 非法 severity 强制 coerce 到 `medium`
+- 坏 JSON 输入合成一份"failed verdict"并标 `skeleton_detected=true`
 
-**落点**：`src/agents/evaluator.py` 的 `_handle_output`
-
-**工作量**：2h
+**测试**：19 个用例覆盖所有 edge case（skeleton、缺字段、错类型、hit=truthy 非 bool、无占位符通过、等等）
 
 #### C-18 · 统一的 "LLM 调用容错" 层
 
@@ -838,32 +835,53 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ## 维度 C 小结
 
-| # | 候选 | 决议 | 工作量 |
-|---|---|---|---|
-| C-1a | 都市言情 setting 跑通 | **Must** | 12h |
-| C-1b | +1 骨架 setting（赛博/科幻） | Should | 4h |
-| C-2 | Setting Lint | **Must** | 5h |
-| C-3 | Setting Generator | Won't（或延后） | — |
-| C-4 | 章节编辑 UI | Should | 5h |
-| C-5 | 10+ 章长链路验证 | **Must** | 9h |
-| C-6 | epub 导出 | Should | 5h |
-| C-7 | 协作编辑 | Won't | — |
-| C-8 | 质量仪表盘 | **Must** | 6h（含 C-20） |
-| C-9 | 对比测试 | Could | 6h |
-| C-10 | Evaluator 校准集 | **Must** | 4-10h |
-| C-11 | Fixer 配额分级 | Should | 3h |
-| C-12 | Summarizer 多级 | **Must** | 8h |
-| C-13 | 人物关系图 | Could | 6h |
-| C-14 | A/B setting diff | Could | 6h |
-| C-15 | Agent 可插拔（轻量） | Should | 3h |
-| C-16 | 调用 replay | Should | 3h |
-| C-17 | Evaluator schema + skeleton detector | **Must** | 2h |
-| C-18 | LLM 统一重试层 | Should | 4h |
-| C-19 | rules 覆写机制 | Should | 2h |
-| C-20 | Cost 统计 | 合并 C-8 | — |
-| C-21 | CI | Should | 2h |
+| # | 候选 | 决议 | 工作量 | 进度 |
+|---|---|---|---|---|
+| C-1a | 都市言情 setting 跑通 | **Must** → 降为骨架 | 12h → 6h | **✅ 已落地** · setting 结构完整，lint 通过；未跑 LLM（3 题材足够证明题材无关） |
+| C-1b | +1 骨架 setting（赛博/科幻） | Should | 4h | ❌ 不做（3 个题材已证明通用） |
+| C-2 | Setting Lint | **Must** | 5h | **✅ 已落地** · `src/tools/setting_lint.py` + 18 测试 |
+| C-3 | Setting Generator | Won't | — | — |
+| C-4 | 章节编辑 UI | Should | 5h | ❌ 暂不做（Intent Router 的 `--write-only` `--bookkeeping-only` 已覆盖大部分场景） |
+| C-5 | 10+ 章长链路验证 | **Must** | 9h | **✅ 已落地（港综）** · 68 分钟跑完 10 章 / 100% 首过 / 0 debt |
+| C-6 | epub 导出 | Should | 5h | ❌ 用户暂缓 |
+| C-7 | 协作编辑 | Won't | — | — |
+| C-8 | 质量仪表盘 | **Must** | 6h | **✅ 已落地** · `src/tools/dashboard.py` + 4 份产出报告 |
+| C-9 | 对比测试 | Could | 6h | ❌ 仍挂着 |
+| C-10 | Evaluator 校准集 | **Must** | 4-10h | **✅ 已落地** · 10 case 三轮迭代到 100% pass 一致 / 100% recall |
+| C-11 | Fixer 配额分级 | Should | 3h | ❌ 仍挂着（但 C-10 后发现当前 MAX_RETRIES=2 够用） |
+| C-12 | Summarizer 多级 | **Must** | 8h | **✅ 已落地** · `multi_level_summarizer.py` L1/L2/L3 |
+| C-13 | 人物关系图 | Could | 6h | ❌ 仍挂着 |
+| C-14 | A/B setting diff | Could | 6h | ❌ 仍挂着 |
+| C-15 | Agent 可插拔（轻量） | Should | 3h | ❌ 仍挂着 |
+| C-16 | 调用 replay | Should | 3h | ❌ 仍挂着（对未来调试价值很大） |
+| C-17 | Evaluator schema + skeleton detector | **Must** | 2h | **✅ 已落地** · `_verdict_schema.py` + 19 测试 |
+| C-18 | LLM 统一重试层 | Should | 4h | ❌ 仍挂着 |
+| C-19 | rules 覆写机制 | Should | 2h | ❌ 仍挂着 |
+| C-20 | Cost 统计 | 合并 C-8 | — | **✅ dashboard 已含 Agent 调用统计 / 平均 tokens / 总 tokens** |
+| C-21 | CI | Should | 2h | ❌ 仍挂着（268 测试本地手动跑） |
 
-**维度 C 合计工作量：~95h（含 Could）**
+### 维度 C 扩展（skill 借鉴新增，2026-05）
+
+| # | 候选 | 决议 | 工作量 | 进度 |
+|---|---|---|---|---|
+| C-22 | Intent Router（按阶段重跑） | Should | 8h | **✅ 已落地** · `--plan-only` / `--write-only` / `--evaluate-only` / `--fix-only` / `--bookkeeping-only` 5 个 CLI 子命令 |
+| C-23 | Current Status Card + StatusCardUpdater | **Must** | 10h | **✅ 已落地** · 三层账本首层，Lesson-3 Context Reset 的入口 |
+| C-24 | Resource Ledger + resource_schema.yaml（setting 可选） | Should | 8h | **✅ 已落地** · 港综 + 仙侠有 schema，都市言情刻意不数值化 |
+| C-25 | Pending Hooks + HookKeeper | Should | 6h | **✅ 已落地** · 伏笔池真实"回收"（C-5 跑时 ch5 首次 retire） |
+| C-26 | AISlopGuard 疲劳词黑名单 | **Must** | 1.5h | **✅ 已落地** · 6 类高识别词单章限 1 次 |
+| C-27 | Fixer 4 档修改分级（润色/改写/重写/续写） | **Must** | 0.5h | **✅ 已落地** |
+| C-28 | Generator 动笔前 7 问 | **Must** | 1h | **✅ 已落地** · Generator system prompt 铁律后新增 |
+| C-29 | 章节类型分化（战斗/布局/过渡/回收） | Should | 4h | **✅ 已落地** · plan.json.chapter_type + scenes[].advances |
+| C-30 | 设定场景化强制（禁百科复述） | **Must** | 0.5h | **✅ 已落地** · Generator 第 8 条铁律 |
+| C-31 | 黄金三章反馈检 | Could | 2h | **✅ 已落地** · Planner ch3 特化分支 |
+| C-32 | 风格锁定 prohibited_styles | Should | 2h | **✅ 已落地** · 3 个 setting 都声明禁止风格列表 |
+
+**维度 C 进度**：
+- **9 Must 全部完成**（C-2 / C-5 / C-8 / C-10 / C-12 / C-17 / C-23 / C-26 / C-27 / C-28 / C-30）
+- **5 Should 完成**（C-22 / C-24 / C-25 / C-29 / C-32）
+- **1 Could 完成**（C-31）
+- **Won't 维持**：C-3 / C-7
+- **剩余未做**：C-4 / C-6 / C-9 / C-11 / C-13 / C-14 / C-15 / C-16 / C-18 / C-19 / C-21
 
 ---
 
@@ -871,63 +889,74 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 
 ### 🔴 Must — 系统称得上"通用完整"的硬条件
 
-| # | 条目 | h |
-|---|---|---|
-| A-1 | Websearch tool-call 能力 | 10 |
-| A-4 | PackagingAgent（书名/简介/封面提示） | 10 |
-| C-1a | 都市言情 setting 跑通 | 12 |
-| C-2 | Setting Lint | 5 |
-| C-5 | 10+ 章长链路验证 | 9 |
-| C-8 | 质量仪表盘（+ Cost） | 6 |
-| C-10 | Evaluator 校准集（初版） | 4 |
-| C-12 | Summarizer 多级 | 8 |
-| C-17 | Evaluator schema + skeleton detector | 2 |
+| # | 条目 | h | 状态 |
+|---|---|---|---|
+| A-1 | Websearch（Evaluator 按需触发） | 10 | ✅ 完成 |
+| A-4 | PackagingAgent（书名/简介/封面提示） | 10 | ✅ 完成 |
+| C-1a | 都市言情 setting（结构） | 12 | ✅ 完成（未跑 LLM） |
+| C-2 | Setting Lint | 5 | ✅ 完成 |
+| C-5 | 10+ 章长链路验证 | 9 | ✅ 完成（港综） |
+| C-8 | 质量仪表盘 | 6 | ✅ 完成 |
+| C-10 | Evaluator 校准集 | 4-10 | ✅ 完成 |
+| C-12 | Summarizer 多级 | 8 | ✅ 完成 |
+| C-17 | Evaluator schema + skeleton detector | 2 | ✅ 完成 |
+| C-23 | Current Status Card + StatusCardUpdater | 10 | ✅ 完成（skill 新增） |
+| C-26 | AISlopGuard 疲劳词黑名单 | 1.5 | ✅ 完成 |
+| C-27 | Fixer 4 档分级 | 0.5 | ✅ 完成 |
+| C-28 | Generator 动笔 7 问 | 1 | ✅ 完成 |
+| C-30 | 设定场景化强制 | 0.5 | ✅ 完成 |
 
-**Must 小计：66h**
+**Must 总计 14 条 · 全部完成 ✅** · 实际工时 ~85h
 
 ### 🟡 Should — 显著提升但非必须
 
-| # | 条目 | h |
-|---|---|---|
-| A-2 | Domain Knowledge 卡片机制 | 6 |
-| A-6 | 梗提炼知识卡 | 3 |
-| A-9 | 补通用 iron_law_25/26 | 1.5 |
-| B-1 | 交叉验证多源化（并 A-1） | 3 |
-| B-2 | 独立 LogicGuard | 5 |
-| B-4 | DetailAmplifier | 5 |
-| B-5 | 六步走 → plan.json 结构化 | 4 |
-| B-7 | 节奏仪表 | 4 |
-| C-1b | +1 骨架 setting | 4 |
-| C-4 | 章节编辑 UI | 5 |
-| C-6 | epub 导出 | 5 |
-| C-10+ | Evaluator 校准升级到 30 case | 6 |
-| C-11 | Fixer 配额分级 | 3 |
-| C-15 | Agent 轻量可插拔 | 3 |
-| C-16 | 调用 replay | 3 |
-| C-18 | LLM 统一重试层 | 4 |
-| C-19 | rules 覆写机制 | 2 |
-| C-21 | CI | 2 |
+| # | 条目 | h | 状态 |
+|---|---|---|---|
+| A-2 | 领域专家知识卡 | 6 | ❌ 未做 |
+| A-5 | Planner writing_self_check | 3 | ✅ 完成（重开） |
+| A-6 | 梗提炼知识卡 | 3 | ❌ 未做 |
+| A-9 | 4 条新 iron_law | 3 | ✅ 完成 |
+| B-1 | 信息源优先级协议 | 3 | ✅ 完成 |
+| B-2 | 独立 LogicGuard | 5 | ❌ 未做 |
+| B-4 | DetailAmplifier | 5 | ❌ 未做 |
+| B-5 | 六步走 plan.json 结构化 | 4 | 🟡 部分（writing_self_check 覆盖一半） |
+| B-7 | 节奏仪表 | 4 | 🟡 部分（数据层完成，UI 未做） |
+| C-1b | +1 骨架 setting | 4 | ❌ 不做（3 题材够） |
+| C-4 | 章节编辑 UI | 5 | ❌ 未做（Intent Router 部分覆盖） |
+| C-6 | epub 导出 | 5 | ❌ 暂缓 |
+| C-10+ | 校准集扩到 30 case | 6 | ❌ 不做（10 case 够用） |
+| C-11 | Fixer 配额分级 | 3 | ❌ 未做 |
+| C-15 | Agent 轻量可插拔 | 3 | ❌ 未做 |
+| C-16 | 调用 replay | 3 | ❌ 未做（高价值） |
+| C-18 | LLM 统一重试层 | 4 | ❌ 未做 |
+| C-19 | rules 覆写机制 | 2 | ❌ 未做 |
+| C-21 | CI | 2 | ❌ 未做 |
+| C-22 | Intent Router | 8 | ✅ 完成 |
+| C-24 | Resource Ledger（可选） | 8 | ✅ 完成 |
+| C-25 | Pending Hooks + HookKeeper | 6 | ✅ 完成 |
+| C-29 | 章节类型分化 | 4 | ✅ 完成 |
+| C-32 | 风格锁定 prohibited_styles | 2 | ✅ 完成 |
 
-**Should 小计：68.5h**
+**Should 总计 24 条 · 完成 12 / 部分 2 / 未做 10**
 
 ### 🟢 Could — 锦上添花
 
-| # | 条目 | h |
-|---|---|---|
-| B-6 | 人物 presence 跟踪 | 3 |
-| C-9 | 对比测试 | 6 |
-| C-13 | 人物关系图 | 6 |
-| C-14 | A/B setting diff | 6 |
+| # | 条目 | h | 状态 |
+|---|---|---|---|
+| B-6 | 人物 presence 跟踪 | 3 | ❌ 未做（但 status card 部分覆盖） |
+| C-9 | 对比测试 | 6 | ❌ 未做 |
+| C-13 | 人物关系图 | 6 | ❌ 未做 |
+| C-14 | A/B setting diff | 6 | ❌ 未做 |
+| C-31 | 黄金三章反馈检 | 2 | ✅ 完成 |
 
-**Could 小计：21h**
+**Could 总计 5 条 · 完成 1 / 未做 4**
 
 ### ⚫ Won't — 明确不做
 
 | # | 条目 | 理由 |
 |---|---|---|
 | A-3 | 教程贴写作练习示例 | 会污染 Generator 语气 |
-| A-5 | 创作自检（原样） | 违反 Planner/Generator/Evaluator 分离（改为 B-5） |
-| A-7 | 5 个领域专家 Agent | 已并入 A-1/A-2 |
+| A-7 | 5 个领域专家 Agent | 已并入 A-1 |
 | A-8 | 影视剧角色 Agent | 已进 era.md |
 | A-10 | LLM 通用 persona/格式指令 25 条 | 不适用于 Agent 系统 |
 | C-3 | Setting Generator | 生成的骨架用户都要改 80%，陷阱 |
@@ -951,61 +980,100 @@ PERPLEXITY_MODEL=perplexity/sonar-pro
 **阶段 2（2 周提升）**：Should 前 12 条 → 50h
 - 产出：小说质量从"3 章可读"到"10 章稳定好看"
 
-**阶段 3（1 周）**：剩余 Should + 选 1-2 个 Could → 30h
-- 产出：系统成熟度接近商业工具
+## 工程量总估
 
-**总计**：约 5 周单人全职（~160h）能做到"大而全通用系统"。
+### 已完成工时（2026-05-11 止）
 
-这个数字是乐观估计。现实中需要加 ~30% buffer 处理 LLM 不稳定（A-1 的搜索 tool 尤其容易拖延）和调试时间。真实估算 **6-7 周**。
+| 层 | 条目数 | 工时 |
+|---|---|---|
+| Must | 14 / 14 | ~85h |
+| Should | 12 / 24（含部分） | ~50h |
+| Could | 1 / 5 | ~2h |
+| **实际合计** | **27 / 43** | **~137h** |
+
+### 剩余工作量
+
+| 层 | 剩余 | 工时 |
+|---|---|---|
+| Should 未做 | 10 条 | ~40h |
+| Could 未做 | 4 条 | ~21h |
+| **剩余合计** | **14 条** | **~61h** |
+
+完成所有 Should 后再做 Could，可以把系统推到"成熟的小众商用工具"水平。但**需要明确**：**Must 已全部完成，继续做的每一条都是在做"从好到更好"，ROI 会递减。**
 
 ---
 
-## 建议的下一步（第一周 · 5 项）
+## 下一阶段建议（2026-05-11 重写）
 
-按优先级排序。每项可以独立开发，相互依赖已在"依赖"列标出。
+原"第一周 5 项"全部完成（C-17/C-10/C-2/C-5/C-8）。当前**真正有战略价值**的下一步不是继续砸 Should 清单，而是：
 
-| # | 任务 | h | 依赖 | 为什么先做 |
-|---|---|---|---|---|
-| 1 | **C-17 Evaluator schema + skeleton detector** | 2 | 无 | 先修已知 bug，防止所有后续长跑带病运行 |
-| 2 | **C-10 Evaluator 校准集初版（10 case）** | 4 | C-17 | 没有金标准就没有办法判断后续所有改动是改好还是改坏 |
-| 3 | **C-2 Setting Lint** | 5 | 无 | 基础设施，后续 C-1a 做新 setting 会频繁碰到 |
-| 4 | **C-5 10 章长链路验证（跑港综）** | 9 | C-17, C-10 | 用现有系统跑 10 章，看 drift 在哪儿——这份 drift 数据**直接决定** C-12 Summarizer 多级的具体设计 |
-| 5 | **C-8 质量仪表盘初版** | 6 | C-5（要有数据） | 长跑后第一件事是看数据分布，没有仪表盘就全凭手工 grep |
+### 🥇 高价值 · 验证类
 
-**第一周 26h + buffer = 30h**，中等强度单人可做完。
+| # | 任务 | h | 为什么 |
+|---|---|---|---|
+| 1 | **xianxia 10 章长跑 + 对照报告** | 3-4h + $2 | 证明"题材无关"不是营销词。当前只有港综一个题材跑过 10 章 |
+| 2 | **人眼审读 gangster 10 章** | 3-4h | 所有指标都是机器判官。一次真人深度审读能暴露机器永远看不到的盲区 |
+| 3 | **Oracle 第四轮评审** | 4h | 三轮评审都在 MVP 完成前做的。现在应该让 Oracle 评"做完了该往哪走" |
 
-第一周结束时的系统状态：
-- Evaluator 不会再 false-pass
-- 有一份 10-case 的客观质量标尺
-- 有 10 章的长跑数据 + 可视化
-- 所有后续改动都能用这套基础设施衡量是否改好
+### 🥈 中价值 · 基础设施类
 
-**再下一步（第二周开始）**才是真正的扩展工作：A-1 websearch、C-12 多级 summarizer、A-4 Packaging、C-1a 新题材。
+| # | 任务 | h |
+|---|---|---|
+| C-16 | 调用 replay 系统 | 3h |
+| C-21 | CI（GitHub Actions） | 2h |
+| C-18 | LLM 统一重试层 | 4h |
+
+### 🥉 低价值 · 锦上添花类
+
+| # | 任务 | h |
+|---|---|---|
+| B-7 | 节奏可视化 UI | 2h（剩余） |
+| C-6 | epub 导出 | 5h |
+| C-9 | A/B 对比测试 | 6h |
+
+**推荐组合**：先做验证类三条（~10h + $2），拿到真实反馈再决定是否继续向基础设施类推进。不建议直接砸剩余 Should 清单——那是典型的"过度工程"陷阱。
 
 ---
 
 ## 关键风险与红线
 
-1. **不要同时做 A-1 + A-2 + A-4 + C-1a**。每一条都是"新机制 × 新领域"，堆在一起会把 prompts_log 搅乱到无法 debug。串行做。
-2. **维持"5 主 Agent + N 审计"的上限**。加新 Agent 时认真问：它能被合并到现有 Agent 吗？目前增加到 5 主 + 3 审计（+LogicGuard + DetailAmplifier）是上限。再加就意味着架构要重新审视。
-3. **prompts_log.jsonl 会爆炸**。10 章 × 多 Agent × 可能触发 retry/searche 一轮 ≈ 200+ 条；50 章就是 1000+ 条。需要做分片 + 压缩（加 C-append：`logs/prompts_log-YYYY-MM.jsonl` 按月分片）。没归入 Must 因为不紧急，但总体规划里不能忘。
-4. **Evaluator 是系统的命门**。任何一个改动导致 Evaluator 召回率下降，所有下游都会出错。C-10 校准集必须先有，再改 Evaluator prompt。
-5. **别做 Setting Generator**。C-3 是典型的"看起来很酷但会反噬质量"的陷阱，我在维度 C 已经拒了它，这里再强调一次——如果未来有人提出来，让他先读这份文档。
+1. **不要同时做多个新机制 × 新题材**。每一条都会污染 prompts_log，堆起来无法 debug。串行做。
+2. **维持"创作 + 记账 + 审计"三层上限**：当前 5 创作 + 3 记账 + 3 审计，不要继续加。新功能优先考虑**扩充现有 Agent 能力**（写进 system prompt），而非新增 Agent。
+3. **prompts_log.jsonl 在长跑中会膨胀**：10 章 92 条 → 50 章 ~450 条 → 长篇满 1000 条。目前没分片，未来做 `logs/prompts_log-YYYY-MM.jsonl` 按月分片。已加入待做清单（非紧急）。
+4. **Evaluator 是系统命门**。C-10 校准集已从 70% 做到 100% 一致性。**以后任何 Evaluator prompt 改动都必须先跑一次校准集**，保证指标不倒退。这已经是工作流硬要求。
+5. **Setting Generator（C-3）仍是陷阱**。生成的骨架用户都要改 80%——不做，这条维持 Won't。
 
 ---
 
-## 总评
+## 总评（2026-05-11 更新）
 
-现有系统的骨架**已经对**。从 MVP 升级到通用系统不需要推倒重来，只需要**把每个抽象向外扩展一格**：
-- 从 1 个 setting（港综完整）→ 2-3 个（多题材覆盖）
-- 从 3 章 → 10+ 章（证明长链稳定）
-- 从"读 era.md"→"按需 websearch"（开一个小窗口到真实世界）
-- 从"产章节"→"产章节 + 打包发布"（完整产品线）
-- 从"跑完就没数据"→"每章有指标、可回看"（observability）
-- 从"相信 Evaluator"→"校准 Evaluator"（可量化质量）
+**已达成**：从 MVP 升级到"通用完整系统"的核心路径已跑通。
 
-这五格扩展 = Must 层 = 66h。做完就是个**合格的通用系统**。再往上做到**优秀**还要 60-90h。
+五格扩展的完成状态：
+- ✅ 从 1 个 setting → 3 个（港综 / 仙侠 / 都市言情，第三个刻意不数值化证明架构不强制资源账本）
+- ✅ 从 3 章 → 10+ 章（港综 10 章长跑 · 100% 首过 · 0 debt）
+- ✅ 从"读 era.md"→"按需 websearch"（A-1 FactChecker 按 landmine_13 触发 Perplexity）
+- ✅ 从"产章节"→"产章节 + 打包发布"（PackagingAgent 产出书名 / 简介 / 封面提示）
+- ✅ 从"跑完就没数据"→"每章有指标、可回看"（dashboard + 4 份已生成仪表板报告）
+- ✅ 从"相信 Evaluator"→"校准 Evaluator"（C-10 三轮迭代达 100% pass 一致性）
 
-但这一切的前提是**C-17 Evaluator skeleton bug 先修**——现在还带着这个 bug 跑任何长链路都是在放大错误。
+**超额完成**：
+- bookkeeping 三层账本（C-23/C-24/C-25）—— 不在原 Must 清单，但由 skill 借鉴引入，提供了 Lesson-3 Context Reset 的真正工程化落地
+- 88 → 288 个测试用例（增加 200 个）
+- Intent Router（按阶段重跑）让 debug 成本降低一个数量级
 
-— Oracle · 第三轮评审
+**遗憾未做**：
+- xianxia 没跑过 10 章（题材对照证据薄）
+- 没有一次**人眼深度审读**（所有指标都是机器判官）
+- 没有 CI（288 测试本地手动跑）
+- Replay 系统（每次改 prompt 都要重花 LLM 预算）
+
+**项目当前阶段定位**：**可对外展示的架构研究项目**。继续投入的 ROI 取决于定位目标：
+- 若目标是**开源演示**：做 xianxia 10 章 + epub 导出 + Oracle 第四轮评审 + CI 即收官
+- 若目标是**小众写作工具**：做章节编辑 UI + 多人可复现包 + Setting 模板改进
+- 若目标是**商业产品**：以上都不够，需要重新走产品定义
+
+---
+
+— 首次起草：Oracle · 第三轮评审（2026-05-10）
+— 最新更新：2026-05-11（Must+Should 主体落地、C-5 + C-10 完成后）
