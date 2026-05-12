@@ -529,6 +529,50 @@ def api_project_extract_abort(pid: str):
     return jsonify({"ok": True})
 
 
+@app.post("/api/projects/<pid>/draft-outline")
+def api_project_draft_outline(pid: str):
+    """Regenerate outline.json from a synopsis via OutlineDrafter LLM call.
+
+    Delegates to pipeline.run_draft_outline, which persists the new
+    outline.json under projects/<pid>/ and re-bootstraps state/ if this
+    project is currently active.
+    """
+    if not (config.PROJECTS_DIR / pid).exists():
+        return jsonify({"ok": False, "reason": "project not found"}), 404
+    body = request.get_json(silent=True) or {}
+    synopsis = body.get("synopsis", "")
+    from src.pipeline import run_draft_outline
+    try:
+        out = run_draft_outline(pid, synopsis=synopsis)
+    except FileNotFoundError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 404
+    except Exception as e:
+        return jsonify({"ok": False, "reason": str(e)}), 500
+    return jsonify(out)
+
+
+@app.post("/api/projects/<pid>/draft-characters")
+def api_project_draft_characters(pid: str):
+    """Regenerate characters.yaml from a brief via CharactersDrafter LLM call.
+
+    Delegates to pipeline.run_draft_characters, which persists the new
+    characters.yaml under projects/<pid>/ and re-bootstraps state/ if this
+    project is currently active.
+    """
+    if not (config.PROJECTS_DIR / pid).exists():
+        return jsonify({"ok": False, "reason": "project not found"}), 404
+    body = request.get_json(silent=True) or {}
+    brief = body.get("brief", "")
+    from src.pipeline import run_draft_characters
+    try:
+        out = run_draft_characters(pid, brief=brief)
+    except FileNotFoundError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 404
+    except Exception as e:
+        return jsonify({"ok": False, "reason": str(e)}), 500
+    return jsonify(out)
+
+
 # ---------- project file editing ----------
 _PROJECT_EDITABLE = {"project.yaml", "outline.json", "characters.yaml", "timeline.yaml"}
 
