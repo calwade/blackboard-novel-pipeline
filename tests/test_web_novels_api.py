@@ -414,3 +414,12 @@ def test_novels_view_renders(client):
     body = resp.get_data(as_text=True)
     assert "novels.js" in body
     assert "素材库" in body or "Novels" in body
+
+
+def test_novels_view_mentions_supported_encodings(client):
+    """Task C: dropzone sub-text tells users they don't have to pre-convert."""
+    resp = client.get("/novels")
+    body = resp.get_data(as_text=True)
+    # Key encodings + a hint that auto-conversion happens
+    for needle in ("GB18030", "Big5", "自动转"):
+        assert needle in body, f"dropzone hint missing {needle!r}"
