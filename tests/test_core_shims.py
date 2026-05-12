@@ -29,3 +29,21 @@ def test_blackboard_still_works_after_move(tmp_path: Path):
     bb = Blackboard(root=tmp_path)
     bb.write_text("x.txt", "hi")
     assert bb.read_text("x.txt") == "hi"
+
+
+def test_legacy_base_agent_import_still_works():
+    from src.agents._base import BaseAgent  # noqa: F401
+    assert BaseAgent is not None
+
+
+def test_base_agent_shim_is_same_class():
+    from src.agents._base import BaseAgent as Shim
+    from src.core.base_agent import BaseAgent as Core
+    assert Shim is Core
+
+
+def test_existing_agents_still_subclass_base():
+    """所有现有 agent 都继承 BaseAgent；shim 之后必须仍然 isinstance 判定成功。"""
+    from src.agents.summarizer import Summarizer
+    from src.core.base_agent import BaseAgent
+    assert issubclass(Summarizer, BaseAgent)

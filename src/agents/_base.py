@@ -1,56 +1,10 @@
-"""Common base for all 5 primary agents.
+"""Backward-compat shim — BaseAgent moved to src/core/base_agent.py on 2026-05-11.
 
-Each agent is one function but we wrap it as a class to keep:
-- name (for prompt_log)
-- temperature (role-specific)
-- response_format (json or text)
-- a standard run() entry point that takes a Blackboard + kwargs
-
-Subclasses override `_build_prompts(bb, **kwargs) -> (system, user, inputs_read)`
-and `_handle_output(bb, raw, **kwargs) -> None` to persist results.
+The `llm` module is also re-exported at module level because many existing tests
+monkey-patch `src.agents._base.llm.chat` directly. Removing it would break those
+tests even though the actual BaseAgent code now lives in src/core/base_agent.py.
+Both shim and core module reference the same underlying `src.llm` module, so
+patches against either path take effect.
 """
-from __future__ import annotations
-
-from abc import ABC, abstractmethod
-from pathlib import Path
-from typing import Literal
-
-from .. import llm
-from ..blackboard import Blackboard
-
-
-class BaseAgent(ABC):
-    name: str = "base"
-    temperature: float = 0.7
-    response_format: Literal["text", "json"] = "text"
-    max_tokens: int = 4096
-
-    @abstractmethod
-    def _build_prompts(
-        self, bb: Blackboard, **kwargs
-    ) -> tuple[str, str, list[str]]:
-        """Return (system_prompt, user_prompt, inputs_read_paths)."""
-
-    @abstractmethod
-    def _handle_output(self, bb: Blackboard, raw: str, **kwargs) -> None:
-        """Persist the LLM output to the blackboard."""
-
-    def run(self, bb: Blackboard, **kwargs) -> str:
-        system, user, inputs_read = self._build_prompts(bb, **kwargs)
-        raw = llm.chat(
-            system=system,
-            user=user,
-            agent_name=self.name,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            response_format=self.response_format,
-            inputs_read=inputs_read,
-        )
-        self._handle_output(bb, raw, **kwargs)
-        return raw
-
-    # Helpers subclasses can use
-    @staticmethod
-    def _read_rule(rule_filename: str) -> str:
-        from .. import config
-        return (config.RULES_DIR / rule_filename).read_text(encoding="utf-8")
+from ..core.base_agent import BaseAgent  # noqa: F401
+from .. import llm  # noqa: F401  # re-export for monkeypatch compatibility
