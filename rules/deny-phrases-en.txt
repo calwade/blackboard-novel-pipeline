@@ -1,0 +1,34 @@
+# English AI-slop deny-phrase list
+# Used as a Tier-1 regex scan against genre-pack English fragments
+# (rare in zh-CN project but kept for code quotes / metadata). Case-insensitive.
+# Source: yzhao062/agent-style zero-false-positive 8 + classic AI overused
+# Format: one phrase per line, # comments + blank lines ignored
+
+# ---- Classic AI overused ----
+delve into
+delves into
+in the realm of
+navigate the complexities
+in today's fast-paced world
+it is important to note
+it is worth noting
+it goes without saying
+
+# ---- AI pivot phrases ----
+that being said
+at the end of the day
+when all is said and done
+on the other hand
+moreover
+furthermore
+
+# ---- Empty intensifiers ----
+truly remarkable
+a testament to
+a tapestry of
+a symphony of
+
+# ---- Lazy transitions ----
+in conclusion
+to sum up
+all things considered
