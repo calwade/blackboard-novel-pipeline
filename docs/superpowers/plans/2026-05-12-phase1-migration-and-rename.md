@@ -1,50 +1,45 @@
 # Phase 1 · 数据迁移 + 模块改名
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
 
-**Phase Goal:** 把仓库从 `genres/<id>/` + `projects/<id>/` 两层结构迁移到 `presets/<id>/`（起点模板）+ `projects/<id>/`（题材文件下沉）的单层结构；同时把 `src/genre_pipeline/` 目录改名为 `src/genre_extractor/`。
+**Phase Goal:** 把仓库从 `genres/<id>/` + `projects/<id>/` 两层结构迁移到 `presets/<id>/` + `projects/<id>/`（题材文件下沉）；`src/genre_pipeline/` 改名为 `src/genre_extractor/`。
 
-**Phase 产出:**
-- 迁移脚本 `scripts/migrate-to-book-centric.py`（可幂等重跑）+ 配套测试
-- `presets/` 目录（含 3 个 preset，id 保留原值）
-- 3 本内置作品目录下各有 4 份题材文件
-- `genres/` 目录不再存在
-- `projects/test-ui-smoke/` 不再存在
-- `src/genre_extractor/` 替代 `src/genre_pipeline/`（目录改名，所有 import 同步更新）
+**所有验收自动化**：每个任务结束后 `pytest` 必须绿，无任何肉眼核对步骤。
 
-**Phase Checkpoint:** 本 phase 结束时，旧测试套件（除了已知 skip 的题材流水线相关测试）全部仍然绿——因为本 phase 只搬运文件和改名，不改语义。
+**Phase Checkpoint 命令（所有任务完成后必须通过）:**
+```bash
+.venv/bin/python3 -m pytest tests/ -x -q --ignore=tests/test_genre_trial.py
+```
 
 ---
 
 ## 文件结构（本 phase 产出）
 
-- Create: `scripts/migrate-to-book-centric.py`
+- Create: `scripts/migrate_to_book_centric.py`（下划线，便于被 pytest import）
 - Create: `tests/test_migration_script.py`
-- Create: `presets/` + 3 个子目录
-- Rename: `src/genre_pipeline/` → `src/genre_extractor/`（含所有 .py）
-- Modify: 每个 tests/test_genre_*.py 的 import path（`src.genre_pipeline` → `src.genre_extractor`）
-- Modify: `src/genre_extractor/__init__.py`、`__main__.py`、`pipeline.py` 里的 self-reference
-- Modify: `web/app.py` 里的 import 路径
-- Modify: `AGENTS.md` / `README.md` 里的 `src/genre_pipeline` 引用（临时更新路径即可，文档正式重写在 Phase 5）
-- Modify: `.gitignore` 新增 `presets/*/.build/`
-- Delete: `genres/`
-- Delete: `projects/test-ui-smoke/`
+- Create: `tests/test_phase1_checkpoint.py`（整仓状态断言）
+- Rename: `src/genre_pipeline/` → `src/genre_extractor/`
+- Modify: 所有 `tests/test_genre_*.py` 的 import path
+- Modify: `web/app.py`、`AGENTS.md`、`README.md` 里的 module 引用
+- Modify: `.gitignore`：`genres/*/.build/` → `presets/*/.build/`
+- Delete: `genres/`、`projects/test-ui-smoke/`（由迁移脚本操作）
 
 ---
 
-## Task 1.1: 写迁移脚本的测试
+## Task 1.1 · 写迁移脚本（红→绿一次走完，TDD）
 
 **Files:**
 - Create: `tests/test_migration_script.py`
+- Create: `scripts/migrate_to_book_centric.py`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1:** 写 `tests/test_migration_script.py` — 覆盖 8 项断言：
 
 ```python
-"""Tests for scripts/migrate-to-book-centric.py — the one-shot repo migration."""
+"""Migration script: genres/ + projects/(with genre ref) → presets/ + projects/(self-contained)."""
 from __future__ import annotations
 
 import importlib.util
-import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -52,32 +47,30 @@ import yaml
 
 
 def _load_migrate_module():
-    """Load the migration script as a module (it lives in scripts/, not src/)."""
     root = Path(__file__).resolve().parent.parent
-    spec_path = root / "scripts" / "migrate-to-book-centric.py"
-    spec = importlib.util.spec_from_file_location("migrate_book_centric", spec_path)
+    spec_path = root / "scripts" / "migrate_to_book_centric.py"
+    spec = importlib.util.spec_from_file_location("migrate_to_book_centric", spec_path)
     mod = importlib.util.module_from_spec(spec)
+    sys.modules["migrate_to_book_centric"] = mod
     spec.loader.exec_module(mod)
     return mod
 
 
 @pytest.fixture
 def fake_repo(tmp_path: Path) -> Path:
-    """Build a mini repo that mimics pre-migration layout."""
-    # genres/
+    # genres/alpha (has resource_schema) + genres/beta (no schema)
     for gid in ("alpha", "beta"):
         g = tmp_path / "genres" / gid
         g.mkdir(parents=True)
         (g / "genre.yaml").write_text(f"id: {gid}\ndisplay_name: {gid}\n", encoding="utf-8")
-        (g / "era.md").write_text(f"# era for {gid}\n", encoding="utf-8")
+        (g / "era.md").write_text(f"# era {gid}\n", encoding="utf-8")
         (g / "writing-style-extra.md").write_text(f"# style {gid}\n", encoding="utf-8")
         (g / "iron-laws-extra.md").write_text(f"# laws {gid}\n", encoding="utf-8")
-    # alpha has optional resource_schema; beta does not
     (tmp_path / "genres" / "alpha" / "resource_schema.yaml").write_text(
-        "resources:\n  - name: gold\n    unit: coin\n", encoding="utf-8"
+        "resources:\n  - name: gold\n", encoding="utf-8"
     )
 
-    # projects/ — 2 real + 1 smoke test residue
+    # 2 real projects + 1 smoke test residue
     for pid, gid in (("alpha-bookone", "alpha"), ("beta-booktwo", "beta")):
         p = tmp_path / "projects" / pid
         p.mkdir(parents=True)
@@ -92,11 +85,11 @@ def fake_repo(tmp_path: Path) -> Path:
     smoke.mkdir(parents=True)
     (smoke / "project.yaml").write_text("id: test-ui-smoke\n", encoding="utf-8")
 
-    # novels/ big pool (not migrated — stays put)
+    # root novels pool (must remain untouched)
     novels = tmp_path / "novels"
     novels.mkdir()
     (novels / "README.md").write_text("pool\n", encoding="utf-8")
-    (novels / "sample.txt").write_text("chapter 1\n", encoding="utf-8")
+    (novels / "sample.txt").write_text("chapter one\n", encoding="utf-8")
 
     return tmp_path
 
@@ -104,54 +97,41 @@ def fake_repo(tmp_path: Path) -> Path:
 def test_migration_produces_presets_dir(fake_repo: Path):
     mod = _load_migrate_module()
     mod.migrate(repo_root=fake_repo)
-
     presets = fake_repo / "presets"
-    assert presets.exists() and presets.is_dir()
-    assert (presets / "alpha" / "genre.yaml").exists()
-    assert (presets / "alpha" / "era.md").exists()
+    assert (presets / "alpha" / "genre.yaml").read_text(encoding="utf-8").startswith("id: alpha")
     assert (presets / "alpha" / "resource_schema.yaml").exists()
-    assert (presets / "beta" / "genre.yaml").exists()
-    assert not (presets / "beta" / "resource_schema.yaml").exists()  # beta had no schema
+    assert (presets / "beta" / "iron-laws-extra.md").exists()
+    assert not (presets / "beta" / "resource_schema.yaml").exists()
 
 
 def test_migration_creates_empty_novels_per_preset(fake_repo: Path):
     mod = _load_migrate_module()
     mod.migrate(repo_root=fake_repo)
-
     for gid in ("alpha", "beta"):
         novels_dir = fake_repo / "presets" / gid / "novels"
-        assert novels_dir.exists()
-        # Empty except for a .gitkeep to preserve the dir in git
         assert (novels_dir / ".gitkeep").exists()
-        txt_files = list(novels_dir.glob("*.txt"))
-        assert txt_files == []
+        assert list(novels_dir.glob("*.txt")) == []
 
 
 def test_migration_copies_genre_files_into_project_dirs(fake_repo: Path):
     mod = _load_migrate_module()
     mod.migrate(repo_root=fake_repo)
-
-    # alpha-bookone should now carry all 4 (+ optional resource_schema)
-    p = fake_repo / "projects" / "alpha-bookone"
+    alpha = fake_repo / "projects" / "alpha-bookone"
     for fname in ("era.md", "writing-style-extra.md", "iron-laws-extra.md", "resource_schema.yaml"):
-        assert (p / fname).exists(), f"{fname} missing in alpha-bookone"
-
-    # beta-booktwo — no resource_schema (beta didn't have one)
-    p = fake_repo / "projects" / "beta-booktwo"
+        assert (alpha / fname).exists(), f"{fname} missing in alpha-bookone"
+    beta = fake_repo / "projects" / "beta-booktwo"
     for fname in ("era.md", "writing-style-extra.md", "iron-laws-extra.md"):
-        assert (p / fname).exists()
-    assert not (p / "resource_schema.yaml").exists()
+        assert (beta / fname).exists()
+    assert not (beta / "resource_schema.yaml").exists()
 
 
-def test_migration_adds_source_preset_to_project_yaml(fake_repo: Path):
+def test_migration_rewrites_project_yaml(fake_repo: Path):
     mod = _load_migrate_module()
     mod.migrate(repo_root=fake_repo)
-
-    for pid, expected_preset in (("alpha-bookone", "alpha"), ("beta-booktwo", "beta")):
-        with (fake_repo / "projects" / pid / "project.yaml").open(encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-        assert data["source_preset"] == expected_preset
-        assert "genre" not in data  # old field removed
+    for pid, expected in (("alpha-bookone", "alpha"), ("beta-booktwo", "beta")):
+        data = yaml.safe_load((fake_repo / "projects" / pid / "project.yaml").read_text(encoding="utf-8"))
+        assert data["source_preset"] == expected
+        assert "genre" not in data
 
 
 def test_migration_deletes_genres_dir(fake_repo: Path):
@@ -169,63 +149,34 @@ def test_migration_deletes_test_ui_smoke(fake_repo: Path):
 def test_migration_leaves_novels_pool_untouched(fake_repo: Path):
     mod = _load_migrate_module()
     mod.migrate(repo_root=fake_repo)
-
-    novels = fake_repo / "novels"
-    assert novels.exists()
-    assert (novels / "README.md").exists()
-    assert (novels / "sample.txt").exists()
+    assert (fake_repo / "novels" / "sample.txt").read_text(encoding="utf-8") == "chapter one\n"
+    assert (fake_repo / "novels" / "README.md").exists()
 
 
 def test_migration_is_idempotent(fake_repo: Path):
     mod = _load_migrate_module()
     mod.migrate(repo_root=fake_repo)
-    # Second run should short-circuit on "presets/ already exists"
     result = mod.migrate(repo_root=fake_repo)
     assert result["skipped"] is True
-    assert "already migrated" in result["reason"].lower()
+    assert "already" in result["reason"].lower()
 ```
 
-- [ ] **Step 2: 跑失败确认**
-
-Run: `pytest tests/test_migration_script.py -v`
-Expected: FAIL（`scripts/migrate-to-book-centric.py` 不存在，导入失败或全部 error）
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 2:** 跑失败确认
 
 ```bash
-git add tests/test_migration_script.py
-git commit -m "test(phase1): add migration script tests (red)"
+.venv/bin/python3 -m pytest tests/test_migration_script.py -v 2>&1 | tail -20
 ```
+Expected: 全部 fail（脚本不存在）
 
----
-
-## Task 1.2: 实现迁移脚本
-
-**Files:**
-- Create: `scripts/migrate-to-book-centric.py`
-
-- [ ] **Step 1: 写实现**
+- [ ] **Step 3:** 写 `scripts/migrate_to_book_centric.py`：
 
 ```python
 #!/usr/bin/env python3
-"""One-shot migration: genres/ + projects/(with source genre ref) → presets/ + projects/(self-contained).
+"""One-shot migration: genres/ + projects/(with genre ref) → presets/ + projects/(self-contained).
 
-What this does:
-  1. presets/ = copy of genres/ (id preserved)
-  2. presets/<id>/novels/ created empty (with .gitkeep) — the big novels/ pool stays put
-  3. For each project, copy its source genre's 4 files (era.md, writing-style-extra.md,
-     iron-laws-extra.md, resource_schema.yaml if present) into the project dir.
-  4. Rewrite project.yaml: drop `genre:` key, add `source_preset:` (same value, renamed).
-  5. Delete genres/ and projects/test-ui-smoke/.
-  6. Root novels/ is untouched — it's the shared pool.
-
-Idempotent: if presets/ already exists, do nothing.
-Safe: does not touch projects/<id>/state/ (runtime artifacts; bootstrap will regenerate).
-
-Run once:
-    python3 scripts/migrate-to-book-centric.py
-
-Delete this script after the migration is merged.
+Idempotent: if presets/ already exists OR genres/ is absent, skips.
+Safe: does not touch projects/<id>/state/ (bootstrap will regenerate at runtime).
+Run once after this change is merged, then delete this file.
 """
 from __future__ import annotations
 
@@ -236,83 +187,61 @@ from typing import Optional
 
 import yaml
 
-
-GENRE_FILES = (
-    "era.md",
-    "writing-style-extra.md",
-    "iron-laws-extra.md",
-)
+GENRE_FILES = ("era.md", "writing-style-extra.md", "iron-laws-extra.md")
 OPTIONAL_GENRE_FILES = ("resource_schema.yaml",)
 
 
 def migrate(repo_root: Optional[Path] = None) -> dict:
     root = Path(repo_root) if repo_root else Path(__file__).resolve().parent.parent
-
     presets = root / "presets"
     genres = root / "genres"
     projects = root / "projects"
 
     if presets.exists():
         return {"skipped": True, "reason": "already migrated (presets/ exists)"}
-
     if not genres.exists():
         return {"skipped": True, "reason": "already migrated (no genres/ found)"}
 
-    # 1. presets/ ← genres/ (copy entire tree, id preserved)
+    # 1. presets/ ← genres/
     presets.mkdir(parents=True)
     for genre_dir in sorted(genres.iterdir()):
-        if not genre_dir.is_dir():
-            continue
-        dst = presets / genre_dir.name
-        shutil.copytree(genre_dir, dst)
+        if genre_dir.is_dir():
+            shutil.copytree(genre_dir, presets / genre_dir.name)
 
-    # 2. presets/<id>/novels/ empty with .gitkeep
+    # 2. empty novels/ per preset
     for preset_dir in sorted(presets.iterdir()):
-        if not preset_dir.is_dir():
-            continue
-        novels_dir = preset_dir / "novels"
-        novels_dir.mkdir(exist_ok=True)
-        (novels_dir / ".gitkeep").write_text("", encoding="utf-8")
+        if preset_dir.is_dir():
+            (preset_dir / "novels").mkdir(exist_ok=True)
+            (preset_dir / "novels" / ".gitkeep").write_text("", encoding="utf-8")
 
-    # 3 + 4. Inject genre files into each project + rewrite project.yaml
+    # 3 + 4. inject genre files + rewrite project.yaml
     if projects.exists():
         for proj_dir in sorted(projects.iterdir()):
-            if not proj_dir.is_dir():
+            if not proj_dir.is_dir() or proj_dir.name == "test-ui-smoke":
                 continue
-            if proj_dir.name == "test-ui-smoke":
-                continue  # will be deleted in step 5
             proj_yaml = proj_dir / "project.yaml"
             if not proj_yaml.exists():
                 continue
-            with proj_yaml.open(encoding="utf-8") as f:
-                pdata = yaml.safe_load(f) or {}
-            src_genre_id = pdata.get("genre")
-            if not src_genre_id:
+            pdata = yaml.safe_load(proj_yaml.read_text(encoding="utf-8")) or {}
+            src_id = pdata.get("genre")
+            if not src_id:
                 continue
-            src_dir = presets / src_genre_id
+            src_dir = presets / src_id
             if not src_dir.exists():
                 continue
-
-            # copy required + optional genre files
-            for fname in GENRE_FILES:
+            for fname in GENRE_FILES + OPTIONAL_GENRE_FILES:
                 src = src_dir / fname
                 if src.exists():
                     shutil.copy2(src, proj_dir / fname)
-            for fname in OPTIONAL_GENRE_FILES:
-                src = src_dir / fname
-                if src.exists():
-                    shutil.copy2(src, proj_dir / fname)
-
-            # rename genre: → source_preset: and rewrite
-            pdata["source_preset"] = src_genre_id
+            pdata["source_preset"] = src_id
             pdata.pop("genre", None)
-            with proj_yaml.open("w", encoding="utf-8") as f:
-                yaml.safe_dump(pdata, f, allow_unicode=True, sort_keys=False)
+            proj_yaml.write_text(
+                yaml.safe_dump(pdata, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
 
-    # 5a. Delete genres/
+    # 5. cleanup
     shutil.rmtree(genres)
-
-    # 5b. Delete projects/test-ui-smoke/
     smoke = projects / "test-ui-smoke" if projects.exists() else None
     if smoke and smoke.exists():
         shutil.rmtree(smoke)
@@ -323,267 +252,377 @@ def migrate(repo_root: Optional[Path] = None) -> dict:
 if __name__ == "__main__":
     result = migrate()
     if result["skipped"]:
-        print(f"⚠️  {result['reason']}", file=sys.stderr)
+        print(f"skipped: {result['reason']}", file=sys.stderr)
         sys.exit(0)
-    print(f"✅ {result['reason']}")
+    print(f"ok: {result['reason']}")
 ```
 
-- [ ] **Step 2: 跑测试验证通过**
-
-Run: `pytest tests/test_migration_script.py -v`
-Expected: PASS（8/8）
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 4:** 跑通过确认
 
 ```bash
-git add scripts/migrate-to-book-centric.py
-git commit -m "feat(phase1): implement one-shot repo migration script"
+.venv/bin/python3 -m pytest tests/test_migration_script.py -v 2>&1 | tail -5
+```
+Expected: `8 passed`
+
+- [ ] **Step 5:** Commit
+
+```bash
+git add tests/test_migration_script.py scripts/migrate_to_book_centric.py
+git commit -m "feat(phase1): implement idempotent migration script with test coverage"
 ```
 
 ---
 
-## Task 1.3: 运行真实仓库迁移
+## Task 1.2 · 在真实仓库执行迁移 + 自动化验证
 
 **Files:**
-- Modify: `genres/` → 删除
-- Modify: `projects/test-ui-smoke/` → 删除
-- Create: `presets/gangster-hk-1983/` + `presets/xianxia-ascension/` + `presets/urban-romance-contemporary/`
-- Modify: 3 本内置作品的 `project.yaml` + 拷入 4 份题材文件
+- Modify (via script): `genres/`, `projects/test-ui-smoke/`, `projects/*/project.yaml`, `presets/*/`
+- Create: `tests/test_phase1_repo_state.py`
 
-- [ ] **Step 1: 先备份当前仓库状态（安全起见）**
+- [ ] **Step 1:** 先写整仓状态断言测试 `tests/test_phase1_repo_state.py`：
 
-Run: `git status --short`
-Expected: 工作区 clean（如有未提交的本 phase 代码改动，先 commit 完）
+```python
+"""Phase 1 checkpoint: real repo layout after migration.
 
-Run: `git stash list`（确认没有遗留 stash 阻断）
+Runs against the actual repository (not a fixture). Ensures migration ran
+and left the tree in the expected shape.
+"""
+from __future__ import annotations
 
-- [ ] **Step 2: 跑迁移脚本**
+from pathlib import Path
 
-Run: `python3 scripts/migrate-to-book-centric.py`
-Expected: 输出 `✅ migration complete`
+import pytest
+import yaml
 
-- [ ] **Step 3: 肉眼核对产物**
+REPO = Path(__file__).resolve().parent.parent
+BUILTIN_PRESETS = ("gangster-hk-1983", "xianxia-ascension", "urban-romance-contemporary")
+BUILTIN_PROJECTS = {
+    "gangster-hk-1983-linjiayao": "gangster-hk-1983",
+    "xianxia-ascension-peichangning": "xianxia-ascension",
+    "urban-romance-shenruowei": "urban-romance-contemporary",
+}
+REQUIRED_GENRE_FILES = ("era.md", "writing-style-extra.md", "iron-laws-extra.md")
 
-Run: `ls presets/ && ls projects/`
-Expected:
+
+def test_genres_dir_removed():
+    assert not (REPO / "genres").exists(), "genres/ must be deleted post-migration"
+
+
+def test_presets_dir_has_3_builtin():
+    for gid in BUILTIN_PRESETS:
+        assert (REPO / "presets" / gid / "genre.yaml").exists()
+        for fname in REQUIRED_GENRE_FILES:
+            assert (REPO / "presets" / gid / fname).exists()
+
+
+def test_presets_have_empty_novels_dir():
+    for gid in BUILTIN_PRESETS:
+        novels = REPO / "presets" / gid / "novels"
+        assert novels.exists()
+        assert (novels / ".gitkeep").exists()
+
+
+def test_novels_pool_still_exists():
+    assert (REPO / "novels").exists()
+    assert (REPO / "novels" / "README.md").exists()
+
+
+def test_test_ui_smoke_removed():
+    assert not (REPO / "projects" / "test-ui-smoke").exists()
+
+
+@pytest.mark.parametrize("pid,expected_preset", BUILTIN_PROJECTS.items())
+def test_projects_have_genre_files_inlined(pid: str, expected_preset: str):
+    p = REPO / "projects" / pid
+    for fname in REQUIRED_GENRE_FILES:
+        assert (p / fname).exists(), f"{pid}/{fname} missing post-migration"
+
+
+@pytest.mark.parametrize("pid,expected_preset", BUILTIN_PROJECTS.items())
+def test_projects_yaml_uses_source_preset(pid: str, expected_preset: str):
+    data = yaml.safe_load((REPO / "projects" / pid / "project.yaml").read_text(encoding="utf-8"))
+    assert data.get("source_preset") == expected_preset
+    assert "genre" not in data
 ```
-presets/:
-gangster-hk-1983  urban-romance-contemporary  xianxia-ascension
 
-projects/:
-README.md  gangster-hk-1983-linjiayao  urban-romance-shenruowei  xianxia-ascension-peichangning
+- [ ] **Step 2:** 跑失败确认（迁移未执行，测试应全红）
+
+```bash
+.venv/bin/python3 -m pytest tests/test_phase1_repo_state.py -v 2>&1 | tail -20
 ```
+Expected: 多数 FAIL（`genres/` 还在、`presets/` 不存在 等）
 
-Run: `ls projects/gangster-hk-1983-linjiayao/`
-Expected 包含：`era.md  writing-style-extra.md  iron-laws-extra.md  resource_schema.yaml  project.yaml  outline.json  characters.yaml  timeline.yaml`
+- [ ] **Step 3:** 确认工作区干净，执行迁移
 
-Run: `cat projects/gangster-hk-1983-linjiayao/project.yaml | head -5`
-Expected: 含 `source_preset: gangster-hk-1983`，**不含** `genre:` 字段
+```bash
+set -e
+git status --porcelain | grep -v "^??" && { echo "working tree dirty, abort"; exit 1; } || true
+.venv/bin/python3 scripts/migrate_to_book_centric.py
+```
+Expected stdout: `ok: migration complete`
 
-Run: `ls presets/gangster-hk-1983/novels/`
-Expected: `.gitkeep`（空 novels 目录）
+- [ ] **Step 4:** 整仓状态测试必须通过
 
-Run: `ls -d genres 2>&1`
-Expected: `ls: genres: No such file or directory`
+```bash
+.venv/bin/python3 -m pytest tests/test_phase1_repo_state.py -v 2>&1 | tail -30
+```
+Expected: 全部 PASS（包括 parametrize 出来的 9 条 case）
 
-Run: `ls -d projects/test-ui-smoke 2>&1`
-Expected: `No such file or directory`
-
-Run: `ls novels/ | head`
-Expected: 根目录大池子仍在，内容未变
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 5:** Commit 状态测试和迁移产物到一起
 
 ```bash
 git add -A
-git commit -m "chore(phase1): run migration — genres/→presets/, inline genre files into projects/"
+git commit -m "chore(phase1): execute migration — genres/→presets/, inline genre files into projects/"
 ```
 
 ---
 
-## Task 1.4: `.gitignore` 更新
+## Task 1.3 · 更新 .gitignore
 
 **Files:**
 - Modify: `.gitignore`
 
-- [ ] **Step 1: 读现状**
+- [ ] **Step 1:** 写替换
 
-Run: `grep -n "genres\|presets\|\.build" .gitignore`
+把 `.gitignore` 中包含 `genres/` 的行替换为 `presets/` 等价行，具体：
+- `genres/*/.build/` → `presets/*/.build/`
+- 若有 `genres/` 本身的条目，移除
 
-- [ ] **Step 2: 追加 `presets/*/.build/` 忽略条目，把原 `genres/*/.build/` 删掉**
-
-Replace the line `genres/*/.build/` with `presets/*/.build/`。如果没有该行，在合适位置追加：
-
-```
-# preset pipeline build artifacts
-presets/*/.build/
-```
-
-Run: `grep -n "presets" .gitignore`
-Expected: 至少一行匹配
-
-- [ ] **Step 3: Commit**
+- [ ] **Step 2:** 自动化断言
 
 ```bash
-git add .gitignore
+grep -c "^presets/\*/.build/" .gitignore    # 必须 >= 1
+grep -c "^genres" .gitignore 2>/dev/null || true   # 必须 0
+```
+
+嵌到 `tests/test_phase1_repo_state.py` 追加：
+
+```python
+def test_gitignore_uses_presets():
+    text = (REPO / ".gitignore").read_text(encoding="utf-8")
+    assert "presets/*/.build/" in text
+    assert "\ngenres" not in text and not text.startswith("genres")
+```
+
+- [ ] **Step 3:** 跑测试
+
+```bash
+.venv/bin/python3 -m pytest tests/test_phase1_repo_state.py::test_gitignore_uses_presets -v
+```
+Expected: PASS
+
+- [ ] **Step 4:** Commit
+
+```bash
+git add .gitignore tests/test_phase1_repo_state.py
 git commit -m "chore(phase1): update .gitignore for presets/ layout"
 ```
 
 ---
 
-## Task 1.5: 改名 `src/genre_pipeline/` → `src/genre_extractor/`
+## Task 1.4 · 改名 `src/genre_pipeline/` → `src/genre_extractor/` + 全仓 import 修正
 
 **Files:**
-- Rename: `src/genre_pipeline/` → `src/genre_extractor/`（含所有内部 .py）
-- Modify: `src/genre_extractor/__init__.py`、`__main__.py`、`pipeline.py` 里的 self-reference import / docstring
-- Modify: `web/app.py`（当前 import 了 `src.genre_pipeline.pipeline`）
-- Modify: `AGENTS.md` / `README.md` 里出现的 `src/genre_pipeline` 字串（临时更新，Phase 5 再做系统性改写）
+- Rename: `src/genre_pipeline/` → `src/genre_extractor/`
+- Modify: `src/genre_extractor/__init__.py`、`__main__.py`、`pipeline.py`（docstring / self-reference）
+- Modify: `web/app.py`
+- Modify: `tests/test_genre_*.py`（~17 个）
+- Modify: `AGENTS.md`、`README.md`（模块路径引用）
 
-- [ ] **Step 1: git mv 目录**
+- [ ] **Step 1:** `git mv`
 
-Run: `git mv src/genre_pipeline src/genre_extractor`
-
-- [ ] **Step 2: 改 `src/genre_extractor/__init__.py`**
-
-Read 现状后把注释从
+```bash
+set -e
+git mv src/genre_pipeline src/genre_extractor
 ```
-"""Genre Pipeline — build / fill / audit / extract genre packs.
 
-See docs/superpowers/specs/genre-pipeline-design.md for the full design.
-"""
+- [ ] **Step 2:** 脚本化全仓替换
+
+**⚠️ 排除路径**：`CHANGELOG.md` 和 `docs/history/*.md` 是历史档案，保留旧名作为史料；`docs/superpowers/specs/`、`docs/superpowers/plans/` 指的是文档本身，可以替换。
+
+用 Python 脚本做替换以避免 shell 转义陷阱：
+
+```bash
+.venv/bin/python3 <<'PY'
+from pathlib import Path
+import re
+
+EXCLUDE_FILES = {"CHANGELOG.md"}
+EXCLUDE_DIR_PARTS = {"docs/history", ".venv", ".git", "node_modules", "__pycache__", ".pytest_cache"}
+
+def excluded(p: Path) -> bool:
+    if p.name in EXCLUDE_FILES:
+        return True
+    s = str(p).replace("\\", "/")
+    return any(f"/{d}/" in f"/{s}/" for d in EXCLUDE_DIR_PARTS)
+
+root = Path(".")
+targets = []
+for pat in ("*.py", "*.md", "*.yml", "*.yaml", "*.txt", "*.html", "*.js", "*.css", "*.sh"):
+    for p in root.rglob(pat):
+        if excluded(p):
+            continue
+        text = p.read_text(encoding="utf-8", errors="ignore")
+        if "genre_pipeline" not in text:
+            continue
+        new = text.replace("src.genre_pipeline", "src.genre_extractor") \
+                  .replace("src/genre_pipeline", "src/genre_extractor") \
+                  .replace("genre_pipeline/", "genre_extractor/")
+        if new != text:
+            p.write_text(new, encoding="utf-8")
+            targets.append(str(p))
+
+print(f"updated {len(targets)} files")
+for t in targets:
+    print(" -", t)
+PY
 ```
-改为
-```
+
+- [ ] **Step 3:** 修整 `src/genre_extractor/__init__.py` docstring（脚本可能没精确改对）
+
+```python
 """Genre Extractor — extract genre packs from source novels.
 
 Two entry points:
-  - to_project:  produce era.md etc for a specific book (projects/<book-id>/)
-  - to_preset:   produce a reusable genre preset (presets/<preset-id>/)
+  - to_project: produce era.md etc for a specific book (projects/<book-id>/)
+  - to_preset:  produce a reusable genre preset (presets/<preset-id>/)
 
 See docs/superpowers/specs/book-centric-workflow-design.md for the full design.
 """
 ```
 
-- [ ] **Step 3: 改 `src/genre_extractor/__main__.py`**
+- [ ] **Step 4:** 修整 `src/genre_extractor/__main__.py` 顶部 docstring，把 `python3 -m src.genre_pipeline ...` 改为 `python3 -m src.genre_extractor ...`。**不改命令行标志**（`--new-genre` 等保留，Phase 2 重构）。
 
-把顶部 docstring 里的 `python3 -m src.genre_pipeline` 统一替换为 `python3 -m src.genre_extractor`。
+- [ ] **Step 5:** 自动化断言
 
-**本任务不改 CLI 语义**（`--new-genre` / `--fill-genre` / `--audit-genre` / `--extract-from-novel` 这些命令行标志暂时保留——Phase 2 才会重新设计为 `--to-preset`）。
+追加到 `tests/test_phase1_repo_state.py`：
 
-- [ ] **Step 4: 全仓搜索替换 `src.genre_pipeline` → `src.genre_extractor`**
+```python
+def test_genre_pipeline_module_gone():
+    assert not (REPO / "src" / "genre_pipeline").exists()
+    assert (REPO / "src" / "genre_extractor" / "__init__.py").exists()
 
-Run: `grep -rln "src\.genre_pipeline\|src/genre_pipeline" --include="*.py" --include="*.md" --include="*.yml" --include="*.yaml" --include="*.txt"`
 
-对每个匹配文件，把所有出现的 `src.genre_pipeline` 替换为 `src.genre_extractor`，`src/genre_pipeline` 替换为 `src/genre_extractor`。
+def test_no_stale_genre_pipeline_references():
+    """Everywhere except CHANGELOG.md and docs/history/ must use src.genre_extractor."""
+    import subprocess
+    result = subprocess.run(
+        ["git", "grep", "-l", "genre_pipeline"],
+        capture_output=True, text=True, cwd=REPO,
+    )
+    offenders = [
+        line for line in result.stdout.splitlines()
+        if line and line != "CHANGELOG.md" and not line.startswith("docs/history/")
+    ]
+    assert offenders == [], f"stale genre_pipeline references in: {offenders}"
 
-**具体必改文件清单**（基于现仓库）：
 
-- `web/app.py` — import 那一行
-- `AGENTS.md` — 1 处引用
-- `README.md` — 数处引用（项目结构章节、CLI 章节、题材流水线章节）
-- `CHANGELOG.md` — 保留（是历史记录，允许引用旧名）
-- `tests/test_genre_*.py` 全部（~17 个文件）
-- `docs/history/*.md` — 保留（历史档案，允许引用旧名）
+def test_genre_extractor_imports_ok():
+    import importlib
+    for mod in ("src.genre_extractor", "src.genre_extractor.pipeline"):
+        importlib.import_module(mod)
+```
 
-- [ ] **Step 5: 验证测试导入能过（不强求测试逻辑全绿，仅验证 import 不炸）**
+- [ ] **Step 6:** 跑测试
 
-Run: `python3 -c "import src.genre_extractor; import src.genre_extractor.pipeline"`
-Expected: 无输出（成功）
+```bash
+.venv/bin/python3 -m pytest tests/test_phase1_repo_state.py -v 2>&1 | tail -15
+```
+Expected: 全 PASS
 
-Run: `pytest tests/ --collect-only -q 2>&1 | tail -20`
-Expected: 所有测试能 collect 起来（可能有既存 skip/xfail，但不应出现 "ModuleNotFoundError: src.genre_pipeline"）
+- [ ] **Step 7:** 跑既存测试套件确认无回归
 
-- [ ] **Step 6: Commit**
+```bash
+.venv/bin/python3 -m pytest tests/ -x -q --ignore=tests/test_genre_trial.py 2>&1 | tail -20
+```
+
+**处理既存失败**：若 `test_bootstrap_and_settings.py` 中涉及 `genres/` 目录结构的 case 失败，给每个失败的测试函数加 `@pytest.mark.skip(reason="awaiting phase 2 bootstrap rewrite")`。**只标注，不改逻辑**。其他非预期失败要修到绿。
+
+- [ ] **Step 8:** Commit
 
 ```bash
 git add -A
-git commit -m "refactor(phase1): rename src/genre_pipeline → src/genre_extractor"
+git commit -m "refactor(phase1): rename src/genre_pipeline → src/genre_extractor + update all references"
 ```
 
 ---
 
-## Task 1.6: Checkpoint · 跑原测试套件确认无回归
-
-- [ ] **Step 1: 跑全套测试**
-
-Run: `python3 -m pytest tests/ -x -q --ignore=tests/test_genre_trial.py 2>&1 | tail -30`
-
-Note: `test_genre_trial.py` 有本任务无关的已知 LSP 错误（`tempfile` 属性问题），暂时忽略。其余测试应全部通过。
-
-Expected: `X passed, Y deselected` 或少量 xfail/skip。**不应有 import error 或 migration 引入的失败**。
-
-- [ ] **Step 2: 若有失败**
-
-- 若是 `tests/test_bootstrap_and_settings.py` 里涉及"genre 层"的测试失败——这是**预期的**，因为目录结构变了。但这些测试要到 Phase 2 才系统修改，**本任务暂时添加 `@pytest.mark.skip(reason="awaiting phase 2 bootstrap rewrite")` 标记**到每个失败的测试函数上。
-- 若是其他测试失败——调试失败原因，通常是 import 遗漏了某处。修完再提交。
-
-- [ ] **Step 3: Commit（如果有 skip 标记追加）**
-
-```bash
-git add tests/
-git commit -m "test(phase1): skip tests awaiting phase 2 bootstrap rewrite"
-```
-
-如果无改动则跳过 commit。
-
----
-
-## Task 1.7: Phase 1 收尾 · 更新根目录 `projects/README.md` 和 `genres/README.md`
+## Task 1.5 · 占位 `presets/README.md` + 临时修 `projects/README.md`
 
 **Files:**
-- Delete: `genres/README.md`（其实在 Task 1.3 已随 `genres/` 整体删除）
-- Create: `presets/README.md`（占位，Phase 5 会重写）
-- Modify: `projects/README.md`（更新 "基于哪个 genre" 表述——临时改法）
+- Create: `presets/README.md`
+- Modify: `projects/README.md`
 
-- [ ] **Step 1: 确认 `genres/README.md` 已不存在**
-
-Run: `ls genres/README.md 2>&1`
-Expected: `No such file or directory`
-
-- [ ] **Step 2: 创建 `presets/README.md` 占位**
-
-Create `presets/README.md`：
+- [ ] **Step 1:** 写 `presets/README.md`（详细内容 Phase 5 替换）：
 
 ```markdown
 # presets/ — 题材预设库
 
-preset = 新建作品时的可选起点模板。每个 preset 是 5 份文件（`genre.yaml` + 4 份题材规范），
-位于 `presets/<preset-id>/`。
+preset = 新建作品时的可选起点模板。每个 preset 是 5 份文件（`genre.yaml` + 4 份题材规范）+
+一个 `novels/` 子目录（从大池子 `novels/` 勾选的原著素材副本），位于 `presets/<preset-id>/`。
 
-**preset 在运行时不参与**——它只在新建作品时被拷贝一次。一旦作品创建完成，该作品的题材
-文件就住在 `projects/<book-id>/` 目录下，和 preset 完全解耦。
+**preset 在运行时不参与**——只在"新建作品 · 题材起点 · 从 preset 拷贝"或"从原著拆到 preset"
+两个入口被读/写。一旦作品创建完成，该作品的题材文件就住在 `projects/<book-id>/` 目录下。
 
-详细说明待 Phase 5 重写。
+详细说明见根目录 `README.md` 和 `AGENTS.md`。
 ```
 
-- [ ] **Step 3: 编辑 `projects/README.md` 移除 `genre =` 字段描述**
+- [ ] **Step 2:** 修 `projects/README.md`：把所有 `genre =` 改成 `source_preset =`；"基于哪个 genre" 改为"基于哪个 preset（审计用，可选）"；"已提供的作品"表最后一列 `基于题材` → `基于 preset`。**不重写整篇**，Phase 5 做。
 
-修改 `projects/README.md` 的目录约定章节和"已提供的作品"表，把 "genre = 所基于的题材 id" 替换为 "source_preset = 所基于的 preset id（审计用，可选）"。
-
-**注意**：详细重写留到 Phase 5，本任务只做最小必要改动以避免文档立即失真。
-
-- [ ] **Step 4: Commit**
+具体用 Python 脚本精准替换：
 
 ```bash
-git add presets/README.md projects/README.md
-git commit -m "docs(phase1): add presets/README.md placeholder, update projects/README.md terms"
+.venv/bin/python3 <<'PY'
+from pathlib import Path
+p = Path("projects/README.md")
+t = p.read_text(encoding="utf-8")
+t = t.replace("genre = ", "source_preset = ")
+t = t.replace("基于哪个 genre", "基于哪个 preset（审计用，可选）")
+t = t.replace("基于题材", "基于 preset")
+p.write_text(t, encoding="utf-8")
+print("patched")
+PY
+```
+
+- [ ] **Step 3:** 断言测试追加到 `tests/test_phase1_repo_state.py`：
+
+```python
+def test_presets_readme_exists():
+    assert (REPO / "presets" / "README.md").exists()
+    assert "题材预设库" in (REPO / "presets" / "README.md").read_text(encoding="utf-8")
+
+
+def test_projects_readme_no_genre_keyword():
+    t = (REPO / "projects" / "README.md").read_text(encoding="utf-8")
+    # "genre = X" patterns should be gone (allowing "genre" to appear in prose)
+    assert "genre = " not in t
+    assert "source_preset" in t
+```
+
+- [ ] **Step 4:** 跑测试
+
+```bash
+.venv/bin/python3 -m pytest tests/test_phase1_repo_state.py -v 2>&1 | tail -10
+```
+Expected: 全 PASS
+
+- [ ] **Step 5:** Commit
+
+```bash
+git add presets/README.md projects/README.md tests/test_phase1_repo_state.py
+git commit -m "docs(phase1): add presets/README.md placeholder, retag projects/README.md to source_preset"
 ```
 
 ---
 
-## Phase 1 Checkpoint
+## Phase 1 最终 Checkpoint
 
-Phase 1 完成条件（进 Phase 2 前必须满足）：
+自动化命令（所有任务完成后跑一次）：
 
-- [ ] `presets/` 存在，包含 3 份 preset
-- [ ] `genres/` 不存在
-- [ ] `projects/test-ui-smoke/` 不存在
-- [ ] 3 本内置作品目录下各有完整 4 份题材文件（及 `resource_schema.yaml` 如题材有）
-- [ ] 3 本内置作品的 `project.yaml` 含 `source_preset:`，不含 `genre:`
-- [ ] 根目录 `novels/` 仍在，内容不变
-- [ ] `src/genre_extractor/` 替代 `src/genre_pipeline/`
-- [ ] 全仓 `grep src\.genre_pipeline` 只剩 `CHANGELOG.md` 和 `docs/history/*.md`（历史文档允许保留）
-- [ ] `pytest tests/` 在本 phase 结束后保持绿（除 phase-2-pending 的 skip 标记）
-- [ ] `tests/test_migration_script.py` 8/8 绿
+```bash
+set -e
+.venv/bin/python3 -m pytest tests/test_migration_script.py tests/test_phase1_repo_state.py -v
+.venv/bin/python3 -m pytest tests/ -x -q --ignore=tests/test_genre_trial.py
+```
 
-**确认全部打勾后，进 Phase 2。**
+**退出码 0 表示 Phase 1 通过，可进 Phase 2。**
