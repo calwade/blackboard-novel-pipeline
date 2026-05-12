@@ -219,11 +219,15 @@ def create_project(
     Genre starter flags are mutually exclusive:
       - from_preset=<id>: copy 3-4 genre files verbatim from presets/<id>/
       - blank_genre=True: write TODO stubs
-      - from_extract=... (Phase 3, not implemented yet)
+      - from_extract=... (deferred)
 
-    Outline + characters drafters arrive in Phase 3. For now Phase 2 only
-    accepts the blank_* paths; passing outline_synopsis / characters_brief
-    raises NotImplementedError.
+    Outline starter flags are mutually exclusive:
+      - outline_synopsis=<str>: run OutlineDrafter to draft outline.json
+      - blank_outline=True: write empty outline.json shell
+
+    Characters starter flags are mutually exclusive:
+      - characters_brief=<str>: run CharactersDrafter to draft characters.yaml
+      - blank_characters=True: write empty characters.yaml shell
     """
     _validate_id("project", project_id)
 
@@ -234,15 +238,21 @@ def create_project(
             "from_preset / blank_genre (from_extract deferred to Phase 3)"
         )
 
-    # Phase 2: outline/characters drafter wiring happens in Phase 3.
-    if outline_synopsis is not None:
-        raise NotImplementedError("outline_synopsis support arrives in Phase 3")
-    if characters_brief is not None:
-        raise NotImplementedError("characters_brief support arrives in Phase 3")
-    if not blank_outline:
-        raise ValueError("Phase 2 requires blank_outline=True (drafter wired in Phase 3)")
-    if not blank_characters:
-        raise ValueError("Phase 2 requires blank_characters=True (drafter wired in Phase 3)")
+    # --- Outline starter: 2-way mutex ---
+    outline_choices = [bool(outline_synopsis), blank_outline]
+    if sum(outline_choices) != 1:
+        raise ValueError(
+            "Outline starter flags are mutually exclusive; pick exactly one of "
+            "outline_synopsis / blank_outline"
+        )
+
+    # --- Characters starter: 2-way mutex ---
+    characters_choices = [bool(characters_brief), blank_characters]
+    if sum(characters_choices) != 1:
+        raise ValueError(
+            "Characters starter flags are mutually exclusive; pick exactly one of "
+            "characters_brief / blank_characters"
+        )
 
     project_dir = config.PROJECTS_DIR / project_id
     if project_dir.exists():
@@ -291,17 +301,34 @@ def create_project(
             "# Iron laws\n\n(TODO.)\n", encoding="utf-8"
         )
 
-    # outline.json — blank
-    _write_json(project_dir / "outline.json", {
-        "title": display_name,
-        "chapters": [],
-    })
+    # outline.json — drafter or blank
+    if outline_synopsis:
+        from src.agents.outline_drafter import OutlineDrafter
+        outline_data = OutlineDrafter().run(
+            synopsis=outline_synopsis,
+            chapter_count_target=chapter_count_target,
+            display_name=display_name,
+        )
+        _write_json(project_dir / "outline.json", outline_data)
+    else:
+        _write_json(project_dir / "outline.json", {
+            "title": display_name,
+            "chapters": [],
+        })
 
-    # characters.yaml — blank
-    _write_yaml(project_dir / "characters.yaml", {
-        "protagonist": {"name": protagonist_name, "description": ""},
-        "supporting": [],
-    })
+    # characters.yaml — drafter or blank
+    if characters_brief:
+        from src.agents.characters_drafter import CharactersDrafter
+        chars_data = CharactersDrafter().run(
+            brief=characters_brief,
+            protagonist_name=protagonist_name,
+        )
+        _write_yaml(project_dir / "characters.yaml", chars_data)
+    else:
+        _write_yaml(project_dir / "characters.yaml", {
+            "protagonist": {"name": protagonist_name, "description": ""},
+            "supporting": [],
+        })
 
     # timeline.yaml — blank
     _write_yaml(project_dir / "timeline.yaml", {"events": []})
