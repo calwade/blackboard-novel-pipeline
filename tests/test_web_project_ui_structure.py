@@ -49,3 +49,14 @@ def test_main_js_wires_wizard_and_override():
     # Reads presets and novels list
     assert "/api/presets" in text
     assert "/api/novels" in text
+
+
+def test_no_stale_genres_urls_in_web():
+    """Web layer must fully use /presets routes after Phase 4."""
+    import subprocess
+    result = subprocess.run(
+        ["git", "grep", "-l", "-E", r"/api/genres|href=\"/genres\""],
+        capture_output=True, text=True, cwd=REPO,
+    )
+    hits = [ln for ln in result.stdout.splitlines() if ln and ln.startswith("web/")]
+    assert hits == [], f"stale /genres URLs in web/: {hits}"

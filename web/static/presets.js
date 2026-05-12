@@ -1,8 +1,8 @@
 /* =========================================================
-   Novelforge · Genre Pipeline — client-side glue
+   Novelforge · Preset Pipeline — client-side glue
    Minimal vanilla JS: fetch, render, poll. No framework.
-   Pairs with web/app.py /api/genres/* endpoints and
-   web/templates/genres/*.html views.
+   Pairs with web/app.py /api/presets/* endpoints and
+   web/templates/presets/*.html views.
    ========================================================= */
 (function () {
   'use strict';
@@ -56,13 +56,13 @@
   }
 
   // ========================================================
-  // /genres — index page
+  // /presets — index page
   // ========================================================
   async function initIndex() {
     const grid = $('#genre-grid');
     const count = $('#genre-count');
     try {
-      const data = await apiCall('/api/genres');
+      const data = await apiCall('/api/presets');
       const genres = data.genres || [];
       count.textContent = genres.length + ' 个题材';
       grid.innerHTML = '';
@@ -101,7 +101,7 @@
       el('div', { class: 'genre-card-desc', text: describe(g) }),
       el('div', { class: 'genre-card-meta' }, meta),
       el('div', { class: 'genre-card-actions' }, [
-        el('a', { class: 'btn', href: '/genres/' + encodeURIComponent(g.id) }, ['查看']),
+        el('a', { class: 'btn', href: '/presets/' + encodeURIComponent(g.id) }, ['查看']),
         el('button', { class: 'btn', onclick: () => runAudit(g.id) }, ['审查']),
         el('button', { class: 'btn btn-danger', onclick: () => confirmDelete(g.id) }, ['删除']),
       ]),
@@ -122,7 +122,7 @@
   async function runAudit(gid) {
     toast('正在审查 ' + gid + ' …');
     try {
-      const r = await apiCall('/api/genres/' + encodeURIComponent(gid) + '/audit', { method: 'POST' });
+      const r = await apiCall('/api/presets/' + encodeURIComponent(gid) + '/audit', { method: 'POST' });
       const msg = `${gid}: ${r.error_count || 0} error · ${r.warning_count || 0} warning`;
       toast(msg, r.error_count ? 'err' : 'ok');
     } catch (e) {
@@ -134,7 +134,7 @@
     const ok = window.confirm(`确认删除题材「${gid}」？\n\n此操作不可撤销。如果有作品依赖此题材，将会被拒绝。`);
     if (!ok) return;
     try {
-      await apiCall('/api/genres/' + encodeURIComponent(gid), { method: 'DELETE' });
+      await apiCall('/api/presets/' + encodeURIComponent(gid), { method: 'DELETE' });
       toast('已删除 ' + gid, 'ok');
       initIndex();
     } catch (e) {
@@ -143,7 +143,7 @@
   }
 
   // ========================================================
-  // /genres/new
+  // /presets/new
   // ========================================================
   function initNew() {
     const form = $('#new-genre-form');
@@ -159,12 +159,12 @@
         tone: $('#f-tone').value.trim(),
       };
       try {
-        const r = await apiCall('/api/genres/new', {
+        const r = await apiCall('/api/presets/new', {
           method: 'POST',
           body: JSON.stringify(data),
         });
         toast('已创建 ' + r.genre_id, 'ok');
-        window.location.href = '/genres/' + encodeURIComponent(r.genre_id);
+        window.location.href = '/presets/' + encodeURIComponent(r.genre_id);
       } catch (e) {
         err.textContent = e.message;
         err.hidden = false;
@@ -173,14 +173,14 @@
   }
 
   // ========================================================
-  // /genres/<id>  — detail
+  // /presets/<id>  — detail
   // ========================================================
   async function initDetail(gid) {
     // Wire up action buttons
     $('#btn-audit').addEventListener('click', async () => {
       const btn = $('#btn-audit'); btn.disabled = true;
       try {
-        const r = await apiCall('/api/genres/' + encodeURIComponent(gid) + '/audit', { method: 'POST' });
+        const r = await apiCall('/api/presets/' + encodeURIComponent(gid) + '/audit', { method: 'POST' });
         toast(`审查完成: ${r.error_count || 0} error · ${r.warning_count || 0} warning`, r.error_count ? 'err' : 'ok');
         loadDetail(gid);
       } catch (e) {
@@ -190,7 +190,7 @@
     $('#btn-fill').addEventListener('click', async () => {
       const btn = $('#btn-fill'); btn.disabled = true;
       try {
-        const r = await apiCall('/api/genres/' + encodeURIComponent(gid) + '/fill', { method: 'POST' });
+        const r = await apiCall('/api/presets/' + encodeURIComponent(gid) + '/fill', { method: 'POST' });
         const n = (r.filled || []).length;
         toast(n ? `补齐了 ${n} 份: ${r.filled.join(', ')}` : '没有缺失文件', 'ok');
         loadDetail(gid);
@@ -205,8 +205,8 @@
       // no-op (no #genre-grid) — so we redirect manually:
       setTimeout(() => {
         // If the genre is gone, detail fetch will now 404 — redirect.
-        fetch('/api/genres/' + encodeURIComponent(gid) + '/status')
-          .then(r => { if (r.status === 404) window.location.href = '/genres'; });
+        fetch('/api/presets/' + encodeURIComponent(gid) + '/status')
+          .then(r => { if (r.status === 404) window.location.href = '/presets'; });
       }, 200);
     });
 
@@ -217,7 +217,7 @@
     // Fetch genre list to find this entry's metadata
     let genreMeta = null;
     try {
-      const list = await apiCall('/api/genres');
+      const list = await apiCall('/api/presets');
       genreMeta = (list.genres || []).find(g => g.id === gid);
     } catch (_) {}
     if (genreMeta) {
@@ -241,9 +241,9 @@
     filesEl.innerHTML = '';
     for (const f of expected) {
       // We don't have a generic genre-file read endpoint; just display name.
-      // The backend's file_count in /api/genres tells us *whether* they exist,
+      // The backend's file_count in /api/presets tells us *whether* they exist,
       // but not per-file. For per-file state, we probe via HEAD on /api/genre-file?
-      // Simpler: call /api/genres and infer 4-5 present, then stat individually
+      // Simpler: call /api/presets and infer 4-5 present, then stat individually
       // by attempting /api/genre-files endpoint. To keep scope tight we render
       // just the list with a "tracked" badge.
       filesEl.appendChild(el('li', { class: 'genre-file' }, [
@@ -254,7 +254,7 @@
 
     // Fetch build status + recent issues
     try {
-      const status = await apiCall('/api/genres/' + encodeURIComponent(gid) + '/status');
+      const status = await apiCall('/api/presets/' + encodeURIComponent(gid) + '/status');
       renderPhases($('#gd-phases'), status.phases || {}, status.has_build);
       renderInflight($('#gd-inflight'), status.in_flight);
       // Issues list — we piggyback on the status endpoint by reading the
@@ -309,7 +309,7 @@
   async function renderIssues(target, gid) {
     target.innerHTML = '';
     try {
-      const r = await apiCall('/api/genres/' + encodeURIComponent(gid) + '/issues?limit=10');
+      const r = await apiCall('/api/presets/' + encodeURIComponent(gid) + '/issues?limit=10');
       const issues = r.issues || [];
       if (!issues.length) {
         target.appendChild(el('div', { class: 'placeholder' }, [
@@ -344,7 +344,7 @@
   }
 
   // ========================================================
-  // /genres/<id>/extract — form
+  // /presets/<id>/extract — form
   // ========================================================
   function initExtract(gid) {
     const state = {
@@ -417,11 +417,11 @@
         dry_run: $('#f-dry-run').checked,
       };
       try {
-        await apiCall('/api/genres/' + encodeURIComponent(gid) + '/extract', {
+        await apiCall('/api/presets/' + encodeURIComponent(gid) + '/extract', {
           method: 'POST',
           body: JSON.stringify(body),
         });
-        window.location.href = '/genres/' + encodeURIComponent(gid) + '/extract/progress';
+        window.location.href = '/presets/' + encodeURIComponent(gid) + '/extract/progress';
       } catch (e) {
         err.textContent = e.message;
         err.hidden = false;
@@ -523,14 +523,14 @@
   }
 
   // ========================================================
-  // /genres/<id>/extract/progress — live poll
+  // /presets/<id>/extract/progress — live poll
   // ========================================================
   function initProgress(gid) {
     $('#btn-abort').addEventListener('click', async () => {
       const ok = window.confirm('确认中断当前拆解任务？当前阶段完成后会停下。');
       if (!ok) return;
       try {
-        await apiCall('/api/genres/' + encodeURIComponent(gid) + '/abort', { method: 'POST' });
+        await apiCall('/api/presets/' + encodeURIComponent(gid) + '/abort', { method: 'POST' });
         toast('已发出中断信号，等待下一阶段边界…');
       } catch (e) {
         toast('中断失败: ' + e.message, 'err');
@@ -542,7 +542,7 @@
   let _progressTimer = null;
   async function pollProgress(gid) {
     try {
-      const s = await apiCall('/api/genres/' + encodeURIComponent(gid) + '/status');
+      const s = await apiCall('/api/presets/' + encodeURIComponent(gid) + '/status');
       applyProgressState(s);
       const task = s.task || {};
       const phases = s.phases || {};
