@@ -35,3 +35,33 @@ def test_readme_no_stale_layering_language():
     # Don't reference the Phase 0 decision scars
     assert "历史原因" not in text
     assert "2026-05-11 重构" not in text
+
+
+def test_agents_md_describes_single_layer():
+    text = (REPO / "AGENTS.md").read_text(encoding="utf-8")
+    assert "两层架构" not in text
+    assert "projects/<project-id>/" in text or "projects/<book-id>/" in text
+    assert "preset" in text.lower() or "预设" in text
+
+
+def test_agents_md_state_map_has_drafter_agents():
+    text = (REPO / "AGENTS.md").read_text(encoding="utf-8")
+    assert "OutlineDrafter" in text
+    assert "CharactersDrafter" in text
+
+
+def test_projects_readme_describes_self_contained_book():
+    text = (REPO / "projects" / "README.md").read_text(encoding="utf-8")
+    assert "source_preset" in text
+    assert "era.md" in text  # mentions the inline genre files
+    # No lingering reference to the old genres/ directory layering
+    # (the word "genres" may appear in prose about history; just check that the
+    # structural claim "一本书基于 genre=<id>" is gone)
+    assert "genre = " not in text
+
+
+def test_presets_readme_describes_seed_only():
+    text = (REPO / "presets" / "README.md").read_text(encoding="utf-8")
+    assert "preset" in text.lower() or "预设" in text
+    # preset only acts at new-project time
+    assert "运行时不参与" in text or "运行时不" in text

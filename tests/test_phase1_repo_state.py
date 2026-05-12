@@ -110,6 +110,8 @@ def test_no_stale_genre_pipeline_references():
         "CHANGELOG.md",
         "docs/superpowers/specs/genre-pipeline-design.md",
         "tests/test_phase1_repo_state.py",
+        # Phase 5 final-state test also asserts on the string (negatively).
+        "tests/test_phase5_final_state.py",
     }
     offenders = [
         line for line in result.stdout.splitlines()

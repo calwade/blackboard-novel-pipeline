@@ -1,11 +1,35 @@
-# projects/ — 作品包（Project Pack）
+# projects/ — 作品目录（Books）
 
-这是 **Novelforge** 项目的作品实例层。
+**一本书 = `projects/<book-id>/` 下的全部文件**。每本书是自给自足的：题材规范、大纲、人物、时间线、运行时产物全部在这个目录里，不依赖任何外部共享层。
 
-## 作用
+## 目录约定
 
-作品包**描述一本具体的小说**。每本书对应 `projects/<project-id>/` 下一个独立目录。
-同一题材下可以有任意多个作品（比如两个不同作者都写 gangster-hk-1983 题材的书）。
+```
+projects/<book-id>/
+├── project.yaml              # 必需 · 作品元信息
+│                             #   id / display_name / protagonist_name
+│                             #   opening_year_month / chapter_count_target
+│                             #   source_preset（审计用：题材起点来自哪个 preset 或样本）
+├── outline.json              # 必需 · 大纲 + 每章节拍
+├── characters.yaml           # 必需 · 人物档案
+├── timeline.yaml             # 必需 · 时间线
+├── era.md                    # 必需 · 题材：时代/世界观事实包
+├── writing-style-extra.md    # 必需 · 题材：特有写作风格
+├── iron-laws-extra.md        # 必需 · 题材：特有铁律
+├── resource_schema.yaml      # 可选 · 可追踪资源定义（仙侠/港综有；都市言情无）
+└── state/                    # 运行时产物（.gitignore，bootstrap 后自动生成）
+    ├── setting.yaml          #   由 bootstrap 合成 = project.yaml + 运行时字段
+    ├── era.md / writing-style-extra.md / iron-laws-extra.md
+    ├── outline.json / characters.yaml / timeline.yaml
+    ├── resource_schema.yaml  #   仅当书目录下存在时才被拷入
+    ├── progress.json
+    ├── current_status_card.md / pending_hooks.md / resource_ledger.md
+    ├── chapters/chNNN.{md,plan.json,verdict.json}
+    ├── summaries/chNNN.md
+    ├── fixes/chNNN.*-patch.md
+    ├── issues.jsonl / debt.jsonl / prompts_log.jsonl
+    └── ...
+```
 
 ### 举例
 
@@ -14,83 +38,81 @@
 - 1983-06 从福建抵港
 - ch3 是黑色星期六做空港元
 - 特定的配角列表（阿威 / 赵老四 / 苏婷 / Walsh ...）
+- 题材事实包 `era.md` 是港岛 1983 的金融 / 江湖 / 地理事实
 
-这些**和"港综 1983 题材"本身无关**。换一个主角叫"陈阿强"的港综作品，所有这些都要重写。
+这些都放在同一个目录里，这本书想搬就搬，想 fork 就拷。
 
-## 目录约定
+## `source_preset` 字段是什么？
 
-```
-projects/<project-id>/
-├── project.yaml          # 必需 · 作品元信息（关键字段：source_preset = 所基于的题材 id）
-├── outline.json          # 必需 · 本书大纲 + 每章节拍
-├── characters.yaml       # 必需 · 本书的人物档案
-├── timeline.yaml         # 必需 · 本书的时间线
-└── state/                # 运行时产物（.gitignore，跑流水线后自动生成）
-    ├── chapters/chNNN.{md,plan.json,verdict.json}
-    ├── summaries/chNNN.md
-    ├── fixes/chNNN.*-patch.md
-    ├── current_status_card.md
-    ├── pending_hooks.md
-    ├── resource_ledger.md
-    ├── setting.yaml      # 由 bootstrap 合成：genre.yaml + project.yaml 的合并
-    ├── era.md / iron-laws-extra.md / ... （从题材层拷入）
-    ├── outline.json / characters.yaml / timeline.yaml （从作品层拷入）
-    ├── issues.jsonl
-    ├── debt.jsonl
-    └── prompts_log.jsonl
+`project.yaml` 的 `source_preset` 字段**只作审计用**：记录这本书的题材起点是从哪个 preset 拷贝而来，或者从什么样本拆出来。
+
+- 值可以是某个 preset id（如 `gangster-hk-1983`）
+- 也可以是 `null`（手工填写或完全从头的书）
+- **它不参与运行时**——一旦这本书建出来，作品目录里的 4 份题材文件（`era.md` / `writing-style-extra.md` / `iron-laws-extra.md` / 可选 `resource_schema.yaml`）就是权威，与 preset 完全解耦。改 preset 不会影响已存在的书；改这本书的 `era.md` 也不会影响 preset。
+
+## 激活一本书（Bootstrap）
+
+```bash
+python -m src.bootstrap --project <book-id>
 ```
 
-`state/` 下所有文件都是 Agent 读写的目标。`state/` 的 outline / characters / timeline
-是**运行时拷贝**，原件在 `projects/<id>/` 顶层——作者想改时改顶层文件，再跑一次
-`python -m src.bootstrap --project <id>` 把改动推进 state。
+bootstrap 干的事：
+1. 读 `projects/<id>/project.yaml`
+2. 把该目录下所有必需文件（outline / characters / timeline / era / writing-style-extra / iron-laws-extra / 可选 resource_schema）拷进 `projects/<id>/state/`
+3. 合成 `state/setting.yaml` = `project.yaml` 的字段 + 运行时字段（`preset_id` 回填自 `source_preset`、`resource_ledger_enabled` 由 resource_schema 是否存在推出等）
+4. 重置 `state/progress.json`，touch 空 jsonl
+5. 在 `projects/.active` 记录"当前激活的项目"
+6. 刷新 `config.STATE_DIR` 指向 `projects/<id>/state/`
+
+`state/` 下的文件全部是**运行时拷贝**。作者想改题材或大纲时，改顶层文件（如 `projects/<id>/era.md` 或 `outline.json`），再跑一次 bootstrap 把改动推进 `state/`。
 
 ## 如何新建一本书
 
-### 方式 0（最简）：Web UI 向导
+### 方式 A（推荐）：Web 4 步向导
 
-启动 `flask --app web.app run --port 5055` 后打开 <http://127.0.0.1:5055/>，
-点击 header 的 ◎ 项目切换按钮 → **+ 新建作品**，按向导填题材 / 主角 / 基础信息，
-自动生成 4 份源文件并完成激活，开箱即可跑流水线。
+启动 `flask --app web.app run --port 5055`，打开 <http://127.0.0.1:5055/>，header 的 ◎ 项目切换 → **+ 新建作品**。按顺序填：
 
-### 方式 A：一键脚手架
+1. **题材起点** — 从 preset 勾一份当起点，或选"从零开始 / 手工填写"
+2. **作品元信息** — id / display_name / protagonist_name / opening_year_month / chapter_count_target
+3. **大纲** — 写一段 synopsis，OutlineDrafter 自动起草 `outline.json`
+4. **人物** — 写一段人物简述，CharactersDrafter 自动起草 `characters.yaml`
+
+向导结束会自动激活该作品，可以立刻跑流水线。
+
+### 方式 B：CLI 一键脚手架
 
 ```bash
-python3 -m src.bootstrap --new-project my-book --genre gangster-hk-1983
+python -m src.bootstrap --new-project my-book \
+    --preset gangster-hk-1983 --display-name "港岛新记" \
+    --protagonist "陈阿强" --chapters 80
+# 编辑 projects/my-book/outline.json / characters.yaml
+python -m src.bootstrap --project my-book
 ```
 
-这会在 `projects/my-book/` 下创建 `project.yaml` + 3 个最小 stub 文件。然后编辑它们，
-再跑 `--project my-book` 激活。
+`--preset` 可省略（此时不拷题材文件，由你自己补）。建出的目录包含 `project.yaml` + 从 preset 拷来的 4 份题材文件 + stub 级别的 outline/characters/timeline。
 
-### 方式 B：手动复制
+### 方式 C：手动复制
 
-方式 0 或方式 A 之后，如果需要更细粒度控制，也可以直接复制现有作品目录手改：
+复制任意现有作品目录为起点：
 
-1. 复制任意现有 project 目录
-2. 修改 `project.yaml` 的 `id`、`display_name`、`protagonist_name`、`protagonist_hook` 等
-3. 改 `outline.json` 的章节安排
-4. 改 `characters.yaml` 的人物档案
-5. 改 `timeline.yaml`
-6. `python -m src.tools.setting_lint --project <new-id>` 验证
-7. `python -m src.bootstrap --project <new-id>` 激活
+1. 拷贝 `projects/<old-id>/` → `projects/<new-id>/`
+2. 修改 `project.yaml` 的 `id` / `display_name` / `protagonist_name` / `source_preset` 等
+3. 改 `outline.json` / `characters.yaml` / `timeline.yaml`
+4. 如果换题材，改 `era.md` / `writing-style-extra.md` / `iron-laws-extra.md`（或跑 `python -m src.pipeline --extract-genre <new-id> --sources novels/*.txt` 从样本重新拆）
+5. `python -m src.tools.setting_lint --project <new-id>` 验证
+6. `python -m src.bootstrap --project <new-id>` 激活
 
-## 激活（bootstrap）做了什么
+## 内置作品
 
-1. 读 `projects/<id>/project.yaml`，找到它基于的题材 id
-2. 把 `genres/<genre-id>/` 的题材层文件拷进 `projects/<id>/state/`
-3. 把 `projects/<id>/` 的作品层文件拷进 `projects/<id>/state/`
-4. 合成 `state/setting.yaml`（题材元信息 + 作品元信息合并）
-5. 重置 `state/progress.json`
-6. 在 `projects/.active` 记录"当前激活的项目"
-7. 更新 `config.STATE_DIR` 指向 `projects/<id>/state/`
+| 作品 id | source_preset | 主角 | 资源账本 |
+|---|---|---|---|
+| `gangster-hk-1983-linjiayao` | `gangster-hk-1983` | 林家耀 | ✅ |
+| `xianxia-ascension-peichangning` | `xianxia-ascension` | 裴长宁 | ✅ |
+| `urban-romance-shenruowei` | `urban-romance-contemporary` | 沈若微 | ❌（刻意不数值化） |
 
-## 已提供的作品
+内置作品不可删除（Web 会拦截）。你可以随便 fork 出新 id 去改。
 
-| 项目 id | 基于 preset | 主角 |
-|---|---|---|
-| `gangster-hk-1983-linjiayao` | gangster-hk-1983 | 林家耀 |
-| `xianxia-ascension-peichangning` | xianxia-ascension | 裴长宁 |
-| `urban-romance-shenruowei` | urban-romance-contemporary | 沈若微 |
+## 参考
 
-## 题材层 vs 作品层
-
-详见 [`../genres/README.md`](../genres/README.md) 对照表。
+- preset 层（题材起点模板）：[`../presets/README.md`](../presets/README.md)
+- 总体架构：[`../AGENTS.md`](../AGENTS.md)
