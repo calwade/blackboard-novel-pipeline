@@ -46,6 +46,8 @@ from .auditors.ai_slop_guard import AISlopGuard
 from .auditors.character_guard import CharacterGuard
 from .auditors.fact_checker import FactChecker, should_run as fact_checker_should_run
 from .blackboard import Blackboard
+from .bootstrap import bootstrap_project
+from . import config
 
 MAX_FIXER_RETRIES = 2
 
@@ -367,7 +369,29 @@ def run_packaging(bb: Blackboard) -> dict:
         }
 
 
-def main():
+def run_extract_genre(
+    book_id: str,
+    *,
+    sources: list[str],
+    with_trial: bool = False,
+) -> dict:
+    """Extract a genre pack into a book's dir, then re-bootstrap if it's active.
+
+    Delegates to src.genre_extractor.to_project.extract_to_project. If
+    ``book_id`` is the currently active project, re-run bootstrap so that
+    ``state/`` picks up the freshly-extracted genre files (preserving chapter
+    progress).
+    """
+    from src.genre_extractor import to_project as to_project_mod
+    result = to_project_mod.extract_to_project(
+        book_id, sources=sources, with_trial=with_trial,
+    )
+    if config.get_active_project_id() == book_id:
+        bootstrap_project(book_id, preserve_progress=True)
+    return result
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Novelforge runner")
     grp = parser.add_mutually_exclusive_group(required=True)
     grp.add_argument("--chapter", type=int, help="run one chapter (full pipeline)")
@@ -386,9 +410,31 @@ def main():
                      help="(Intent: fix) run Fixer once from existing verdict.json")
     grp.add_argument("--bookkeeping-only", type=int, metavar="N", dest="bookkeeping_only",
                      help="(Intent: bookkeeping) refresh summary + status card + hooks + ledger from existing prose")
+    # Phase 2 Task 2.5: extract a genre pack directly into a book's own dir
+    grp.add_argument("--extract-genre", type=str, metavar="BOOK_ID", dest="extract_genre",
+                     help="extract a genre pack into projects/<BOOK_ID>/ (requires --sources)")
+    parser.add_argument("--sources", type=str, default="",
+                        help="comma-separated source novel paths (used with --extract-genre)")
+    parser.add_argument("--with-trial", action="store_true", dest="with_trial",
+                        help="run a 3-chapter trial after extraction (used with --extract-genre)")
+    return parser
+
+
+def main():
+    parser = _build_parser()
     args = parser.parse_args()
 
     bb = Blackboard()
+
+    if args.extract_genre:
+        if not args.sources.strip():
+            parser.error("--extract-genre requires --sources <path1,path2,...>")
+        sources = [s.strip() for s in args.sources.split(",") if s.strip()]
+        result = run_extract_genre(
+            args.extract_genre, sources=sources, with_trial=args.with_trial,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        return
 
     if args.packaging:
         result = run_packaging(bb)
