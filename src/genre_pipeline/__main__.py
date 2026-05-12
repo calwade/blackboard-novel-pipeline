@@ -38,19 +38,27 @@ def main() -> int:
     parser.add_argument("--tone", default="", help="tone label (for --new-genre)")
     parser.add_argument("--with-trial", action="store_true", help="also run 3-chapter trial book validation")
     parser.add_argument("--dry-run", action="store_true", help="don't call any LLM; just exercise the plumbing")
+    parser.add_argument("--interactive", action="store_true", help="(with --new-genre) ask questionnaire to build a richer initial draft")
 
     args = parser.parse_args()
 
     from src.genre_pipeline import pipeline
 
     if args.new_genre:
-        out = pipeline.new_genre(
-            args.new_genre,
-            display_name=args.name,
-            genre=args.genre,
-            era=args.era,
-            tone=args.tone,
-        )
+        if args.interactive:
+            from src.genre_pipeline import interview
+            # Interactive overrides CLI flags — run the questionnaire.
+            # id is forced from CLI for safety (user typed it already).
+            answers_override = {"id": args.new_genre}
+            out = interview.run_interview()
+        else:
+            out = pipeline.new_genre(
+                args.new_genre,
+                display_name=args.name,
+                genre=args.genre,
+                era=args.era,
+                tone=args.tone,
+            )
     elif args.fill_genre:
         out = pipeline.fill_genre(args.fill_genre)
     elif args.audit_genre:
