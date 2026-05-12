@@ -2,6 +2,12 @@
 
 Mirrors tests/test_pipeline_intent_router.py's pattern of monkey-patching
 `src.agents._base.llm.chat` + counting calls, adapted to the genre agents.
+
+2026-05-12 update: GenreValidator was split into 3 parallel auditors
+(genre_fact_checker / genre_consistency_guard / genre_style_guard), so
+these tests now stub the 3 auditor agent names instead of "genre_validator".
+The retry-loop semantic being tested (validate→fix→validate, N retries,
+ship-with-debt after max) is unchanged.
 """
 from __future__ import annotations
 
@@ -9,6 +15,14 @@ import itertools
 from pathlib import Path
 
 import pytest
+
+
+# Agents that together constitute the semantic "validate" LLM call set
+_VALIDATE_AGENTS = (
+    "genre_fact_checker",
+    "genre_consistency_guard",
+    "genre_style_guard",
+)
 
 
 def _install_fake_llm(monkeypatch, responses):
@@ -22,7 +36,7 @@ def _install_fake_llm(monkeypatch, responses):
     def fake_chat(*, system, user, agent_name, **kw):
         if agent_name not in iters:
             iters[agent_name] = iter(responses.get(agent_name, itertools.repeat("{}")))
-        out = next(iters[agent_name])
+        out = next(iters[agent_name])  # type: ignore[call-overload]
         calls.append((agent_name, len(calls)))
         return out
 
@@ -30,6 +44,19 @@ def _install_fake_llm(monkeypatch, responses):
     # patching either works, but we patch the shim for clarity.
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat)
     return calls
+
+
+def _count_validate_rounds(calls: list[tuple[str, int]]) -> int:
+    """One validate round = up to 3 auditor calls (one per agent).
+
+    We count unique validation rounds by tracking per-agent call counts and
+    taking the max (each round contributes at most 1 call per agent).
+    """
+    per_agent = {a: 0 for a in _VALIDATE_AGENTS}
+    for name, _ in calls:
+        if name in per_agent:
+            per_agent[name] += 1
+    return max(per_agent.values()) if per_agent else 0
 
 
 def test_validate_no_errors_no_fixer(tmp_path, monkeypatch):
@@ -41,30 +68,30 @@ def test_validate_no_errors_no_fixer(tmp_path, monkeypatch):
     from src.genre_pipeline import pipeline
     pipeline.new_genre("g-clean", display_name="clean", genre="x", era="y", tone="z")
 
+    # All 3 auditors return zero issues
+    empty = '{"issues": []}'
     calls = _install_fake_llm(monkeypatch, {
-        # Validator returns zero issues
-        "genre_validator": ['{"issues": []}'],
+        "genre_fact_checker": [empty],
+        "genre_consistency_guard": [empty],
+        "genre_style_guard": [empty],
     })
 
     from src.core.blackboard import Blackboard
     bb = Blackboard(root=tmp_path / "g-clean" / ".build")
     pipeline._run_validate(bb, "g-clean", with_trial=False)
 
-    # Only validator was called (no Fixer); setting_lint may have raised warnings
-    # (stub files are < 500 chars so warnings/errors from lint will trigger Fixer).
-    # To truly isolate, we read back genre_issues to confirm no error severity
-    # from Stage 2; Stage 1 errors from lint may still exist but that's OK for
-    # this test's purpose.
-    agent_names = [c[0] for c in calls]
-    # At minimum validator was invoked once. Fixer should NOT run because stub
-    # may have lint errors — we just want to confirm the logic *can* short-circuit
-    # when Validator returns no semantic errors AND lint passes.
-    assert agent_names[0] == "genre_validator", f"first call should be validator, got {agent_names}"
+    # All 3 auditors were invoked at least once; Fixer should NOT run because
+    # auditors found nothing (lint may still flag stub files, but that's
+    # orthogonal to this test's assertion).
+    agent_names = {c[0] for c in calls}
+    assert _VALIDATE_AGENTS[0] in agent_names, (
+        f"first call should include an auditor, got {calls}"
+    )
 
 
 def test_validate_ships_debt_after_max_retries(tmp_path, monkeypatch):
-    """Pathological: validator always returns an error on the same file → after
-    2 retries, we bail and write to genre_debt.jsonl."""
+    """Pathological: one auditor always returns an error on the same file →
+    after 2 retries we bail and write to genre_debt.jsonl."""
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
@@ -74,16 +101,19 @@ def test_validate_ships_debt_after_max_retries(tmp_path, monkeypatch):
     # Write something to era.md so Fixer has a real file to touch
     (tmp_path / "g-stubborn" / "era.md").write_text("original era content\n", encoding="utf-8")
 
-    # Validator always says era.md has an error; Fixer always "fixes" (writes
-    # new content) but Validator keeps rejecting.
+    # fact_checker always says era.md has an error; the other two auditors are
+    # clean; Fixer always "fixes" but fact_checker keeps rejecting.
     error_issue = (
         '{"issues": [{"severity": "error", "file": "era.md", '
         '"message": "era.md still wrong", "suggestion": "redo"}]}'
     )
+    empty = '{"issues": []}'
     fixer_output = "rewritten era content\n"
 
     calls = _install_fake_llm(monkeypatch, {
-        "genre_validator": [error_issue, error_issue, error_issue],
+        "genre_fact_checker": [error_issue, error_issue, error_issue],
+        "genre_consistency_guard": [empty, empty, empty],
+        "genre_style_guard": [empty, empty, empty],
         "genre_fixer": [fixer_output, fixer_output],
     })
 
@@ -91,10 +121,11 @@ def test_validate_ships_debt_after_max_retries(tmp_path, monkeypatch):
     bb = Blackboard(root=tmp_path / "g-stubborn" / ".build")
     pipeline._run_validate(bb, "g-stubborn", with_trial=False, max_fix_retries=2)
 
-    # Counts
-    validator_calls = [c for c in calls if c[0] == "genre_validator"]
+    # Counts — 3 validation rounds, 2 fixer rounds
+    assert _count_validate_rounds(calls) == 3, (
+        f"expected 3 validation rounds, got {_count_validate_rounds(calls)}; calls={calls}"
+    )
     fixer_calls = [c for c in calls if c[0] == "genre_fixer"]
-    assert len(validator_calls) == 3, f"expected 3 validator calls, got {len(validator_calls)}"
     assert len(fixer_calls) == 2, f"expected 2 fixer calls, got {len(fixer_calls)}"
 
     # genre_debt.jsonl should have a ship-with-debt record
@@ -115,11 +146,18 @@ def test_validate_recovers_on_second_attempt(tmp_path, monkeypatch):
     pipeline.new_genre("g-recovering", display_name="r", genre="x", era="y", tone="z")
     (tmp_path / "g-recovering" / "era.md").write_text("bad\n", encoding="utf-8")
 
+    error_issue = (
+        '{"issues": [{"severity": "error", "file": "era.md", '
+        '"message": "bad", "suggestion": "fix"}]}'
+    )
+    empty = '{"issues": []}'
+
     calls = _install_fake_llm(monkeypatch, {
-        "genre_validator": [
-            '{"issues": [{"severity": "error", "file": "era.md", "message": "bad", "suggestion": "fix"}]}',
-            '{"issues": []}',
-        ],
+        # Round 1: fact_checker errors, others clean.
+        # Round 2: all clean.
+        "genre_fact_checker": [error_issue, empty],
+        "genre_consistency_guard": [empty, empty],
+        "genre_style_guard": [empty, empty],
         "genre_fixer": ["fixed era content\n"],
     })
 
@@ -127,9 +165,10 @@ def test_validate_recovers_on_second_attempt(tmp_path, monkeypatch):
     bb = Blackboard(root=tmp_path / "g-recovering" / ".build")
     pipeline._run_validate(bb, "g-recovering", with_trial=False, max_fix_retries=2)
 
-    validator_calls = [c for c in calls if c[0] == "genre_validator"]
+    assert _count_validate_rounds(calls) == 2, (
+        f"expected 2 validation rounds, got {_count_validate_rounds(calls)}; calls={calls}"
+    )
     fixer_calls = [c for c in calls if c[0] == "genre_fixer"]
-    assert len(validator_calls) == 2
     assert len(fixer_calls) == 1
 
     # No debt record — recovery succeeded

@@ -1,19 +1,29 @@
-"""GenreValidator - three-stage adversarial review.
+"""GenreValidator - three-stage adversarial review (fan-out edition).
 
 Stage 1 (structure, no LLM):  delegated to src/tools/setting_lint.py
 Stage 2 (semantic, this class):
-   Part A - Tier-1 deny-phrase regex scan (no LLM, deterministic)
-   Part B - adversarial LLM review, reject-by-default
+   Part A - Tier-1 deny-phrase regex scan (no LLM, deterministic, kept here)
+   Part B - Fan-out 3 focused auditors in parallel:
+            - GenreFactChecker       (era.md facts)
+            - GenreConsistencyGuard  (iron-laws vs era vs resource_schema)
+            - GenreStyleGuard        (writing-style + AI-slop)
+            Each auditor tags issues with a distinct `source` field.
 Stage 3 (trial, optional):    delegated to src/genre_pipeline/trial.py
 
-Design notes (from librarian ★★★ #2 + structured-output techniques):
-- Reject-by-default: default verdict is REJECT; only ALL checks pass → accept
-- Quote-then-claim: Validator must cite file + line substring before asserting
-- Tier-1 as a free, zero-false-positive first pass
-- XML-tagged inputs + explicit schema + anti-schema for reliable JSON output
+Design notes:
+- Fan-out (not single monolithic LLM call) mirrors AISlopGuard/CharacterGuard/
+  FactChecker pattern in src/auditors/. Each auditor has a narrow responsibility
+  so its prompt stays short and attention stays focused.
+- Tier-1 deny-scan stays monolithic because it's pure regex (no LLM cost to
+  split; no attention to dilute).
+- One auditor failing does NOT fail the whole validation — it's captured as
+  a `warning` issue tagged file="(validator)".
+- Public interface unchanged: `run(bb, genre_id=...)` — upstream `_run_validate`
+  and the retry loop don't need changes.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import re
 from functools import lru_cache
@@ -103,12 +113,20 @@ INVALID 示例（不要这样写）：
 
 
 class GenreValidator(BaseAgent):
+    """Coordinator: runs Tier-1 deny-scan + fans out 3 auditors in parallel.
+
+    This class itself no longer calls the LLM directly — the 3 auditors
+    (GenreFactChecker / GenreConsistencyGuard / GenreStyleGuard) each make
+    their own focused LLM call. A failure in one auditor is captured as a
+    warning issue; the other two still run to completion.
+    """
+
     name = "genre_validator"
     temperature = 0.0
     response_format = "json"
     max_tokens = 3000
 
-    SYSTEM_PROMPT = SYSTEM_PROMPT  # kept as class attr for external imports
+    SYSTEM_PROMPT = SYSTEM_PROMPT  # kept for external importers / historical tests
 
     # -------------------------------------------------------------------------
     # Tier-1: deterministic deny-phrase regex scan (no LLM)
@@ -155,7 +173,7 @@ class GenreValidator(BaseAgent):
                         "quote": context,
                         "message": (
                             f"命中 deny-phrase「{phrase}」"
-                            f"（{'中文' if lang == 'zh' else 'English'} deny 列表）：" 
+                            f"（{'中文' if lang == 'zh' else 'English'} deny 列表）："
                             f"{'AI 味/废话套语' if lang == 'zh' else 'AI-slop phrase'}，建议重写"
                         ),
                         "suggestion": f"删除或替换「{phrase}」，改用具体描写代替套话",
@@ -165,63 +183,75 @@ class GenreValidator(BaseAgent):
         return issues
 
     # -------------------------------------------------------------------------
-    # Stage 2 Part B: LLM semantic review
+    # BaseAgent abstract-method stubs — this class no longer calls LLM itself,
+    # but the ABC contract requires these. Never invoked because run() below
+    # bypasses super().run().
     # -------------------------------------------------------------------------
-    def _build_prompts(self, bb: Blackboard, *, genre_id: str, **_):
-        from src import config
-
-        genre_dir = config.GENRES_DIR / genre_id
-        files_to_read = (
-            "genre.yaml",
-            "era.md",
-            "writing-style-extra.md",
-            "iron-laws-extra.md",
-            "resource_schema.yaml",
+    def _build_prompts(self, bb: Blackboard, **kwargs):  # pragma: no cover
+        raise NotImplementedError(
+            "GenreValidator coordinates auditors; it does not call LLM directly. "
+            "See GenreFactChecker / GenreConsistencyGuard / GenreStyleGuard."
         )
-        blocks = []
-        inputs_read: list[str] = []
-        for fname in files_to_read:
-            fp = genre_dir / fname
-            if fp.exists():
-                text = fp.read_text(encoding="utf-8")
-                blocks.append(
-                    f"<file name=\"{fname}\">\n{text[:4000]}\n</file>"
-                )
-                inputs_read.append(f"genres/{genre_id}/{fname}")
 
-        user = (
-            f"<genre_pack id=\"{genre_id}\">\n"
-            + "\n\n".join(blocks)
-            + "\n</genre_pack>\n\n"
-            + "<your_task>\n"
-            + "按系统指令的 5 步流程审查上方 <genre_pack>，默认拒稿。\n"
-            + "每条 issue 必须 quote-then-claim。只输出 JSON 本体。\n"
-            + "</your_task>"
+    def _handle_output(self, bb: Blackboard, raw: str, **kwargs):  # pragma: no cover
+        raise NotImplementedError(
+            "GenreValidator coordinates auditors; it does not call LLM directly."
         )
-        return SYSTEM_PROMPT, user, inputs_read
-
-    def _handle_output(self, bb: Blackboard, raw: str, *, genre_id: str, **_):
-        obj = _parse_json(raw)
-        for issue in obj.get("issues", []):
-            issue["genre_id"] = genre_id
-            # Strip verdict-level metadata from per-issue record; keep source tag
-            issue.setdefault("source", "stage2-llm")
-            bb.append_jsonl("genre_issues.jsonl", issue)
 
     # -------------------------------------------------------------------------
-    # run() override — runs Tier-1 FIRST (fast, free), then Stage 2 LLM
+    # run() — Tier-1 deterministic scan, then fan-out 3 auditors in parallel
     # -------------------------------------------------------------------------
     def run(self, bb: Blackboard, **kwargs) -> str:
         genre_id: str = kwargs["genre_id"]
 
-        # Tier-1: deterministic deny-phrase scan
+        # Tier-1: deterministic deny-phrase scan (no LLM)
         tier1_issues = self._tier1_deny_scan(genre_id)
         for issue in tier1_issues:
             issue["genre_id"] = genre_id
             bb.append_jsonl("genre_issues.jsonl", issue)
 
-        # Stage 2: LLM adversarial review (uses BaseAgent.run plumbing)
-        return super().run(bb, **kwargs)
+        # Fan-out: 3 focused auditors in parallel. Each makes its own LLM call
+        # and appends its own issues (tagged with distinct `source`) to
+        # genre_issues.jsonl. Isolation: one auditor failing does not cancel
+        # the others; its crash is captured as a warning issue.
+        from src.genre_pipeline.auditors import (
+            GenreConsistencyGuard,
+            GenreFactChecker,
+            GenreStyleGuard,
+        )
+
+        auditors = [
+            GenreFactChecker(),
+            GenreConsistencyGuard(),
+            GenreStyleGuard(),
+        ]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(auditors)) as ex:
+            futures = {
+                ex.submit(a.run, bb, genre_id=genre_id): a.name
+                for a in auditors
+            }
+            for fut in concurrent.futures.as_completed(futures):
+                agent_name = futures[fut]
+                try:
+                    fut.result()
+                except Exception as e:
+                    bb.append_jsonl(
+                        "genre_issues.jsonl",
+                        {
+                            "severity": "warning",
+                            "file": "(validator)",
+                            "message": (
+                                f"Auditor {agent_name} failed: "
+                                f"{type(e).__name__}: {e}"
+                            ),
+                            "genre_id": genre_id,
+                            "source": "validator-coordinator",
+                        },
+                    )
+
+        # Legacy signature returned a raw LLM response; since we no longer make
+        # one here, return an empty JSON object.
+        return "{}"
 
 
 def _parse_json(raw: str):
