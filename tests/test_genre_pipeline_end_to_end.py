@@ -33,14 +33,19 @@ def test_end_to_end_dry_run(tmp_path, monkeypatch):
         assert status["phases"][phase]["status"] == "done", f"phase {phase} not done"
 
 
-def test_trial_placeholder_records_info(tmp_path):
+def test_trial_rejects_unknown_genre(tmp_path):
+    """Real run_trial validates genre up front — unknown id must raise.
+
+    (The old placeholder silently wrote an info record; the real impl
+    fails fast so upstream callers don't misinterpret a stub run as a
+    successful trial.)
+    """
     from src.core.blackboard import Blackboard
     from src.genre_pipeline.trial import run_trial
 
     bb = Blackboard(root=tmp_path)
-    run_trial("demo-trial", bb)
-    issues = bb.read_jsonl("genre_issues.jsonl")
-    assert any(i["severity"] == "info" and "trial" in i["message"] for i in issues)
+    with pytest.raises((FileNotFoundError, ValueError)):
+        run_trial("demo-trial", bb, dry_run=True)
 
 
 def test_audit_existing_genre_real(tmp_path, monkeypatch):
