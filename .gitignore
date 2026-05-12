@@ -14,3 +14,5 @@ projects/*/state/
 # of the docs/ copies and got deleted on 2026-05-11.
 
 genres/*/.build/
+novels/
+!novels/README.md
