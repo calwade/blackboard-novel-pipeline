@@ -458,7 +458,7 @@ git commit -m "test(phase5): integration smoke for all built-in books + CLI help
 ## Task 5.6 · 归档 spec 到 docs/history/
 
 **Files:**
-- Move: `docs/superpowers/specs/genre-pipeline-design.md` → `docs/history/genre-pipeline-design.md`（原设计已被 book-centric 取代）
+- Move: `docs/superpowers/specs/book-centric-workflow-design.md` → `docs/history/genre-pipeline-design.md`（原设计已被 book-centric 取代）
 
 - [ ] **Step 1:** 追加断言：
 
@@ -474,7 +474,7 @@ def test_book_centric_spec_exists():
 - [ ] **Step 2:** 迁移
 
 ```bash
-git mv docs/superpowers/specs/genre-pipeline-design.md docs/history/genre-pipeline-design.md
+git mv docs/superpowers/specs/book-centric-workflow-design.md docs/history/genre-pipeline-design.md
 ```
 
 - [ ] **Step 3:** 在归档的 md 顶部加 banner：
@@ -505,7 +505,7 @@ for p in Path(".").rglob("*"):
     if "/.venv/" in f"/{s}/" or "/.git/" in f"/{s}/" or "/docs/history/" in f"/{s}/" or s == "CHANGELOG.md":
         continue
     t = p.read_text(encoding="utf-8", errors="ignore")
-    new = t.replace("docs/superpowers/specs/genre-pipeline-design.md", "docs/superpowers/specs/book-centric-workflow-design.md")
+    new = t.replace("docs/superpowers/specs/book-centric-workflow-design.md", "docs/superpowers/specs/book-centric-workflow-design.md")
     if new != t:
         p.write_text(new, encoding="utf-8")
         print("patched", p)
@@ -537,7 +537,7 @@ test -d presets
 test -d presets/gangster-hk-1983
 test -f projects/gangster-hk-1983-linjiayao/era.md
 test -f docs/superpowers/specs/book-centric-workflow-design.md
-test ! -f docs/superpowers/specs/genre-pipeline-design.md
+test ! -f docs/superpowers/specs/book-centric-workflow-design.md
 # no stale genre_pipeline refs
 ! git grep genre_pipeline -- ':!CHANGELOG.md' ':!docs/history'
 echo "Phase 5 done."

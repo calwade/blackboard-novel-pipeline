@@ -332,5 +332,5 @@ python -m src.genre_extractor --to-preset <preset-id> --sources ... [--extract-o
 - 项目总览 + state 地图：`AGENTS.md`
 - 作品规范（自给自足）：`projects/README.md`
 - preset 规范（新建作品的起点模板，运行时不参与）：`presets/README.md`
-- 题材提取流水线设计：`docs/superpowers/specs/genre-pipeline-design.md`
+- 题材提取流水线设计：`docs/superpowers/specs/book-centric-workflow-design.md`
 - CLI 入口：`README.md`

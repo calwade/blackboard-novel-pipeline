@@ -77,7 +77,7 @@ python -m src.genre_extractor --to-preset <id> --validate-only
 - `--with-trial` 真跑 3 章试验书（复用 bootstrap_project 的 scratch 隔离）
 
 规范文档：
-- 设计：[`docs/superpowers/specs/genre-pipeline-design.md`](docs/superpowers/specs/genre-pipeline-design.md)
+- 设计：[`docs/superpowers/specs/book-centric-workflow-design.md`](docs/superpowers/specs/book-centric-workflow-design.md)
 
 ## 架构 1 行说明
 

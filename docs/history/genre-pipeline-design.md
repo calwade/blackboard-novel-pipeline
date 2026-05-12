@@ -1,5 +1,8 @@
 # 题材流水线（Genre Pipeline）— 架构设计
 
+> **📦 历史档案** · 本设计已由 `docs/superpowers/specs/book-centric-workflow-design.md` 取代。保留仅为历史脉络。
+
+
 > **项目代号**：`genre-pipeline`
 > **定位**：Novelforge 的第二条流水线——**建 / 补 / 审 / 拆**题材包
 > **核心决策**：薄壳流水线，90% 复用小说流水线的工程机制，10% 是题材特有 Agent 和 schema

@@ -94,7 +94,7 @@ def test_no_stale_genre_pipeline_references():
 
     Exemptions (meta-references to the refactor itself, cleaned in phase 5):
       - docs/superpowers/plans/  (this-task & future-phase plans quote old name)
-      - docs/superpowers/specs/genre-pipeline-design.md  (old design spec, archived in phase 5)
+      - docs/superpowers/specs/book-centric-workflow-design.md  (old design spec, archived in phase 5)
       - tests/test_phase1_repo_state.py  (this file literally asserts on the string)
     """
     import subprocess
@@ -108,10 +108,12 @@ def test_no_stale_genre_pipeline_references():
     )
     EXEMPT_FILES = {
         "CHANGELOG.md",
-        "docs/superpowers/specs/genre-pipeline-design.md",
+        "docs/superpowers/specs/book-centric-workflow-design.md",
         "tests/test_phase1_repo_state.py",
         # Phase 5 final-state test also asserts on the string (negatively).
         "tests/test_phase5_final_state.py",
+        # Phase 5 integration test also asserts on the string (negatively).
+        "tests/test_phase5_integration.py",
     }
     offenders = [
         line for line in result.stdout.splitlines()

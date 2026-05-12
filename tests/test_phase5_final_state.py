@@ -91,3 +91,11 @@ def test_migration_script_removed_after_use():
 def test_changelog_mentions_book_centric():
     text = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
     assert "book-centric" in text.lower() or "一本书" in text
+
+
+def test_old_genre_pipeline_spec_archived():
+    assert not (REPO / "docs" / "superpowers" / "specs" / "genre-pipeline-design.md").exists()
+
+
+def test_book_centric_spec_exists():
+    assert (REPO / "docs" / "superpowers" / "specs" / "book-centric-workflow-design.md").exists()

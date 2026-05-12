@@ -300,7 +300,7 @@ def list_projects() -> list[str]: ...
 
 **更新**：
 - `docs/web-ui-guide.md`：路由表、页面流程、向导 4 步都要改
-- `docs/superpowers/specs/genre-pipeline-design.md`：改名为 `extraction-pipeline-design.md`，语义调整为"产物落点由调用方决定"
+- `docs/superpowers/specs/book-centric-workflow-design.md`：改名为 `extraction-pipeline-design.md`，语义调整为"产物落点由调用方决定"
 - `docs/demo-snapshots.md`：schema 说明简化（只有一种）
 - `CHANGELOG.md`：新增 `[Unreleased]` 条目记录重构
 
