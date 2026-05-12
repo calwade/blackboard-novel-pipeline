@@ -391,6 +391,54 @@ def run_extract_genre(
     return result
 
 
+def run_draft_outline(book_id: str, *, synopsis: str) -> dict:
+    """Regenerate outline.json from a synopsis. Also re-bootstraps if active."""
+    import yaml as _yaml
+    import json as _json
+    book_dir = config.PROJECTS_DIR / book_id
+    if not book_dir.exists():
+        raise FileNotFoundError(f"Project not found: {book_id}")
+
+    pdata = _yaml.safe_load((book_dir / "project.yaml").read_text(encoding="utf-8")) or {}
+    display_name = pdata.get("display_name") or book_id
+    target = int(pdata.get("chapter_count_target", 50))
+
+    from src.agents.outline_drafter import OutlineDrafter
+    out = OutlineDrafter().run(
+        synopsis=synopsis,
+        chapter_count_target=target,
+        display_name=display_name,
+    )
+    (book_dir / "outline.json").write_text(
+        _json.dumps(out, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    if config.get_active_project_id() == book_id:
+        bootstrap_project(book_id, preserve_progress=True)
+    return out
+
+
+def run_draft_characters(book_id: str, *, brief: str) -> dict:
+    """Regenerate characters.yaml from a brief. Also re-bootstraps if active."""
+    import yaml as _yaml
+    book_dir = config.PROJECTS_DIR / book_id
+    if not book_dir.exists():
+        raise FileNotFoundError(f"Project not found: {book_id}")
+
+    pdata = _yaml.safe_load((book_dir / "project.yaml").read_text(encoding="utf-8")) or {}
+    protagonist = pdata.get("protagonist_name") or "TBD"
+
+    from src.agents.characters_drafter import CharactersDrafter
+    out = CharactersDrafter().run(brief=brief, protagonist_name=protagonist)
+    (book_dir / "characters.yaml").write_text(
+        _yaml.safe_dump(out, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    if config.get_active_project_id() == book_id:
+        bootstrap_project(book_id, preserve_progress=True)
+    return out
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Novelforge runner")
     grp = parser.add_mutually_exclusive_group(required=True)
