@@ -17,6 +17,7 @@ from pathlib import Path
 from src import config
 from src.core.blackboard import Blackboard
 from src.genre_pipeline import adaptive, schemas
+from src.genre_pipeline.chapter_stream import ChapterStream
 
 
 STUB_GENRE_YAML = """# Genre: {genre_id}
@@ -151,20 +152,22 @@ def extract_from_novel(
 
     bb = _build_bb(genre_id)
 
-    # Count chapters per source
+    # Count chapters per source. ChapterStream uses a streaming index for
+    # files >= 5MB so we never load multi-MB novels fully into memory.
     novel_sources = []
-    source_texts: list[tuple[str, str, int, int]] = []  # (path, text, total_ch, batch_size)
+    # Each entry: (ChapterStream, batch_size).
+    source_streams: list[tuple[ChapterStream, int]] = []
     for src in sources:
         p = Path(src)
         if not p.exists():
             raise FileNotFoundError(f"source novel not found: {src}")
-        text = p.read_text(encoding="utf-8")
-        total_ch = _count_chapters_in_text(text)
+        stream = ChapterStream(p)
+        total_ch = stream.total_chapters
         bs = adaptive.adaptive_batch_size(total_ch)
         novel_sources.append(
             {"path": str(p), "total_chapters": total_ch, "batch_size": bs}
         )
-        source_texts.append((str(p), text, total_ch, bs))
+        source_streams.append((stream, bs))
 
     # Fresh build_status
     status = schemas.make_initial_build_status(
@@ -187,7 +190,7 @@ def extract_from_novel(
         }
 
     # --- Phase 1: Extract ---
-    _run_extract(bb, source_texts)
+    _run_extract(bb, source_streams)
 
     # --- Phase 2: Merge ---
     _run_merge(bb)
@@ -206,16 +209,25 @@ def extract_from_novel(
     }
 
 
-def _run_extract(bb: Blackboard, source_texts):
+def _run_extract(bb: Blackboard, source_streams):
+    """Run the Extractor over each novel source, one batch at a time.
+
+    `source_streams` is a list of (ChapterStream, batch_size) tuples. Each
+    batch's text is loaded lazily via stream.read_batch() so peak RAM stays
+    bounded regardless of novel size.
+    """
     from src.genre_pipeline.agents.extractor import GenreExtractor
 
     schemas.update_phase_status(bb, phase="extract", status="in_progress")
     agent = GenreExtractor()
     global_batch_id = 0
-    for path, text, total_ch, bs in source_texts:
-        batches_text = _split_text_into_batches(text, total_ch, bs)
-        for local_idx, btxt in enumerate(batches_text, start=1):
+    for stream, bs in source_streams:
+        total_ch = stream.total_chapters
+        for start_ch, end_ch in adaptive.split_into_batches(
+            total_chapters=total_ch, batch_size=bs
+        ):
             global_batch_id += 1
+            btxt = stream.read_batch(start_ch, end_ch)
             schemas.set_in_flight(bb, agent="genre_extractor", batch_id=global_batch_id)
             agent.run(bb, batch_id=global_batch_id, batch_text=btxt)
             schemas.record_batch_done(bb, batch_id=global_batch_id)
@@ -464,15 +476,13 @@ def run_phase(genre_id: str, *, phase: str, with_trial: bool = False) -> dict:
     if phase == "extract":
         # Requires re-reading the source novels — look them up in build_status
         status = bb.read_yaml("build_status.yaml")
-        source_texts = []
+        source_streams: list[tuple[ChapterStream, int]] = []
         for src in status.get("novel_sources", []):
             p = Path(src["path"])
             if p.exists():
-                source_texts.append(
-                    (src["path"], p.read_text(encoding="utf-8"),
-                     src["total_chapters"], src["batch_size"])
-                )
-        _run_extract(bb, source_texts)
+                stream = ChapterStream(p)
+                source_streams.append((stream, src["batch_size"]))
+        _run_extract(bb, source_streams)
     elif phase == "merge":
         _run_merge(bb)
     elif phase == "draft":
