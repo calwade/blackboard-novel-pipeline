@@ -1,0 +1,71 @@
+{% extends "genres/_base.html" %}
+{% block title %}{{ gid }} · 从小说拆解{% endblock %}
+{% block crumbs %}
+<a href="/">作品</a>
+<span class="crumb-sep">›</span>
+<a href="/genres">题材</a>
+<span class="crumb-sep">›</span>
+<a href="/genres/{{ gid }}">{{ gid }}</a>
+<span class="crumb-sep">›</span>
+<span class="is-current">从小说拆解</span>
+{% endblock %}
+
+{% block content %}
+<section class="genre-narrow" data-gid="{{ gid }}">
+  <div class="genre-panel">
+    <div class="genre-panel-head">
+      <h2 class="genre-panel-title">从已有小说拆解题材规范</h2>
+      <p class="genre-panel-sub">
+        四阶段流水线：<em>Extract → Merge → Draft → Validate</em>。<br />
+        每 25 章一批（自适应），笔记落盘，可断点续跑。<span class="hero-em">真实跑会调用 LLM，按量计费；dry_run 模式只走骨架。</span>
+      </p>
+    </div>
+    <form id="extract-form" class="genre-form">
+      <label class="form-field">
+        <span class="form-label">
+          小说源文件路径 <span class="form-required">*</span>
+          <span class="form-hint">一行一个；相对项目根，或绝对路径；UTF-8 纯文本</span>
+        </span>
+        <textarea id="f-sources" class="form-input form-textarea" rows="5"
+                  placeholder="novels/a.txt&#10;novels/b.txt" required></textarea>
+      </label>
+
+      <div class="form-row form-row-checks">
+        <label class="form-check">
+          <input type="checkbox" id="f-with-trial" />
+          <span class="form-check-box"></span>
+          <span class="form-check-text">
+            <strong>with_trial</strong>
+            <em>跑完后额外用试验书跑 3 章校验（慢）</em>
+          </span>
+        </label>
+        <label class="form-check">
+          <input type="checkbox" id="f-dry-run" />
+          <span class="form-check-box"></span>
+          <span class="form-check-text">
+            <strong>dry_run</strong>
+            <em>只走状态骨架，不调 LLM（演示 / 烟测用）</em>
+          </span>
+        </label>
+      </div>
+
+      <div class="form-error" id="f-error" hidden></div>
+      <div class="form-actions">
+        <a class="btn btn-ghost" href="/genres/{{ gid }}">取消</a>
+        <button type="submit" class="btn btn-primary">
+          <span class="btn-glyph">▶</span>启动拆解
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='genres.js') }}" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.GenreUI && window.GenreUI.initExtract) window.GenreUI.initExtract({{ gid|tojson }});
+  });
+</script>
+{% endblock %}

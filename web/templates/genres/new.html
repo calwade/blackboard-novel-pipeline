@@ -1,0 +1,67 @@
+{% extends "genres/_base.html" %}
+{% block title %}新建题材 · Novelforge{% endblock %}
+{% block crumbs %}
+<a href="/">作品</a>
+<span class="crumb-sep">›</span>
+<a href="/genres">题材</a>
+<span class="crumb-sep">›</span>
+<span class="is-current">新建</span>
+{% endblock %}
+
+{% block content %}
+<section class="genre-narrow">
+  <div class="genre-panel">
+    <div class="genre-panel-head">
+      <h2 class="genre-panel-title">从零新建一份题材包</h2>
+      <p class="genre-panel-sub">
+        生成 4 份占位文件（<code>genre.yaml · era.md · writing-style-extra.md · iron-laws-extra.md</code>），
+        之后你可以手工编辑或跑 <em>从小说拆解</em> 把它补全。不会调用大模型。
+      </p>
+    </div>
+    <form id="new-genre-form" class="genre-form">
+      <label class="form-field">
+        <span class="form-label">
+          题材 ID <span class="form-required">*</span>
+          <span class="form-hint">小写 · 数字 · 连字符 / 下划线 · ≤ 64 字符</span>
+        </span>
+        <input id="f-id" name="id" class="form-input form-input-mono" type="text"
+               pattern="^[a-z0-9_][a-z0-9_-]{0,63}$" placeholder="my-genre-id" required />
+      </label>
+      <label class="form-field">
+        <span class="form-label">显示名</span>
+        <input id="f-name" name="name" class="form-input" type="text" placeholder="例：港味黑帮 · 1983" />
+      </label>
+      <div class="form-row">
+        <label class="form-field">
+          <span class="form-label">类型</span>
+          <input id="f-genre" name="genre" class="form-input" type="text" placeholder="黑帮 / 仙侠 / 言情 …" />
+        </label>
+        <label class="form-field">
+          <span class="form-label">时代</span>
+          <input id="f-era" name="era" class="form-input" type="text" placeholder="1983 · 九龙" />
+        </label>
+      </div>
+      <label class="form-field">
+        <span class="form-label">基调 <span class="form-hint">一个短语描述这个题材的感觉</span></span>
+        <input id="f-tone" name="tone" class="form-input" type="text" placeholder="霓虹 · 汗味 · 兄弟情" />
+      </label>
+      <div class="form-error" id="f-error" hidden></div>
+      <div class="form-actions">
+        <a class="btn btn-ghost" href="/genres">取消</a>
+        <button type="submit" class="btn btn-primary">
+          <span class="btn-glyph">＋</span>创建
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='genres.js') }}" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.GenreUI && window.GenreUI.initNew) window.GenreUI.initNew();
+  });
+</script>
+{% endblock %}

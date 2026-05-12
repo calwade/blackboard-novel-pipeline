@@ -118,18 +118,35 @@ def api_genres():
     import yaml
     out = []
     for gid in bootstrap.list_genres():
+        gdir = config.GENRES_DIR / gid
         try:
             gyaml = yaml.safe_load(
-                (config.GENRES_DIR / gid / "genre.yaml").read_text(encoding="utf-8")
+                (gdir / "genre.yaml").read_text(encoding="utf-8")
             ) or {}
         except (OSError, yaml.YAMLError):
             gyaml = {}
+
+        # Count tracked genre files (genre.yaml / era.md / writing-style-extra.md /
+        # iron-laws-extra.md / optional resource_schema.yaml). Ignore .build/.
+        tracked_names = (
+            "genre.yaml",
+            "era.md",
+            "writing-style-extra.md",
+            "iron-laws-extra.md",
+            "resource_schema.yaml",
+        )
+        file_count = sum(1 for n in tracked_names if (gdir / n).exists())
+
+        has_build = (gdir / ".build" / "build_status.yaml").exists()
+
         out.append({
             "id": gid,
             "display_name": gyaml.get("display_name", gid),
             "genre": gyaml.get("genre"),
             "era": gyaml.get("era"),
             "tone": gyaml.get("tone"),
+            "file_count": file_count,
+            "has_build_status": has_build,
         })
     return jsonify({"genres": out})
 
@@ -694,6 +711,357 @@ def api_audit():
 @app.get("/api/status")
 def api_status():
     return jsonify(_read_status())
+
+
+# ---------- genre pipeline ----------
+# The genre pipeline is an independent long-lived job: its artifacts live
+# under genres/<id>/.build/ (git-ignored). It runs on its own lock so a genre
+# extract doesn't block a novel chapter run (different sandboxes).
+#
+# Cancellation: we mirror the novel pipeline's pattern — a module-level
+# CANCEL_EVENT on src.genre_pipeline.pipeline, checked at phase boundaries.
+_genre_lock = threading.Lock()
+_genre_task: dict = {"running": False}
+
+
+def _genre_dir(genre_id: str) -> Path:
+    from src import bootstrap as _bs
+    _bs._validate_id("genre", genre_id)  # reject path-traversal / malformed
+    return config.GENRES_DIR / genre_id
+
+
+@app.post("/api/genres/new")
+def api_genre_new():
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    data = request.get_json(silent=True) or {}
+    gid = (data.get("id") or "").strip()
+    if not gid:
+        return jsonify({"ok": False, "reason": "id required"}), 400
+
+    from src.genre_pipeline import pipeline as gpipe
+    from src import bootstrap as _bs
+    # Validate id up-front for a clean 400 (new_genre would also raise, but
+    # its ValueError currently comes from the filesystem layer — less tidy).
+    try:
+        _bs._validate_id("genre", gid)
+    except ValueError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+
+    try:
+        result = gpipe.new_genre(
+            gid,
+            display_name=(data.get("name") or "").strip(),
+            genre=(data.get("genre") or "").strip(),
+            era=(data.get("era") or "").strip(),
+            tone=(data.get("tone") or "").strip(),
+        )
+    except FileExistsError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 409
+    except (ValueError, OSError) as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+    return jsonify(result)
+
+
+@app.post("/api/genres/<gid>/fill")
+def api_genre_fill(gid: str):
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    gdir = _genre_dir(gid)
+    if not gdir.exists():
+        return jsonify({"ok": False, "reason": f"genre not found: {gid}"}), 404
+    from src.genre_pipeline import pipeline as gpipe
+    try:
+        return jsonify(gpipe.fill_genre(gid))
+    except FileNotFoundError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 404
+    except (ValueError, OSError) as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+
+
+@app.post("/api/genres/<gid>/audit")
+def api_genre_audit(gid: str):
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    # validate id before touching disk; accept missing dirs (audit_genre will
+    # scaffold build_status for them)
+    try:
+        _genre_dir(gid)
+    except ValueError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+    from src.genre_pipeline import pipeline as gpipe
+    try:
+        return jsonify(gpipe.audit_genre(gid))
+    except (ValueError, OSError) as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+
+
+@app.post("/api/genres/<gid>/extract")
+def api_genre_extract(gid: str):
+    """Kick off extract_from_novel in a background thread.
+
+    Body: {sources: [...], with_trial?: bool, dry_run?: bool}
+    Returns 202 {started: true, started_at: ...} on success;
+            409 if a genre build is already running;
+            400 on bad input.
+    """
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    gdir = _genre_dir(gid)
+    if not gdir.exists():
+        return jsonify({"ok": False, "reason": f"genre not found: {gid}"}), 404
+
+    data = request.get_json(silent=True) or {}
+    sources = data.get("sources") or []
+    if not isinstance(sources, list) or not sources:
+        return jsonify({"ok": False, "reason": "sources must be a non-empty list"}), 400
+    # Validate each source exists synchronously — otherwise the worker would
+    # raise FileNotFoundError deep inside extract_from_novel and the caller
+    # would only see it in build_status post-mortem. Cleaner to 400 here.
+    for s in sources:
+        if not isinstance(s, str) or not Path(s).exists():
+            return jsonify({"ok": False, "reason": f"source not found: {s!r}"}), 400
+
+    with_trial = bool(data.get("with_trial", False))
+    dry_run = bool(data.get("dry_run", False))
+
+    if not _genre_lock.acquire(blocking=False):
+        return jsonify({"started": False, "reason": "genre pipeline already running"}), 409
+
+    from src.genre_pipeline import pipeline as gpipe
+    gpipe.CANCEL_EVENT.clear()
+
+    started_at = time.time()
+    _genre_task.update({
+        "running": True,
+        "genre_id": gid,
+        "started_at": started_at,
+        "dry_run": dry_run,
+        "with_trial": with_trial,
+        "sources": sources,
+        "ok": None,
+        "finished_at": None,
+        "error": None,
+    })
+
+    def _worker():
+        try:
+            result = gpipe.extract_from_novel(
+                gid, sources=sources, with_trial=with_trial, dry_run=dry_run,
+            )
+            _genre_task.update({
+                "running": False,
+                "finished_at": time.time(),
+                "ok": True,
+                "result": result,
+            })
+        except gpipe.GenrePipelineAborted:
+            _genre_task.update({
+                "running": False,
+                "finished_at": time.time(),
+                "ok": False,
+                "error": "aborted",
+            })
+        except Exception as e:
+            _genre_task.update({
+                "running": False,
+                "finished_at": time.time(),
+                "ok": False,
+                "error": f"{type(e).__name__}: {e}",
+                "traceback": traceback.format_exc()[-1200:],
+            })
+        finally:
+            _genre_lock.release()
+
+    try:
+        threading.Thread(target=_worker, daemon=True).start()
+    except BaseException:
+        _genre_lock.release()
+        raise
+
+    return jsonify({
+        "started": True,
+        "genre_id": gid,
+        "started_at": started_at,
+        "dry_run": dry_run,
+    }), 202
+
+
+@app.get("/api/genres/<gid>/status")
+def api_genre_status(gid: str):
+    """Return build_status.yaml as JSON + in-memory task metadata.
+
+    Poll target for the progress page. The build_status file is the source
+    of truth (survives process restart); the in-memory task dict contains
+    the ephemeral start time + final error if any.
+    """
+    import yaml
+    try:
+        gdir = _genre_dir(gid)
+    except ValueError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+    if not gdir.exists():
+        return jsonify({"ok": False, "reason": f"genre not found: {gid}"}), 404
+
+    status_path = gdir / ".build" / "build_status.yaml"
+    if not status_path.exists():
+        return jsonify({
+            "genre_id": gid,
+            "phases": {},
+            "task": _genre_task if _genre_task.get("genre_id") == gid else None,
+            "has_build": False,
+        })
+    try:
+        status = yaml.safe_load(status_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as e:
+        return jsonify({"ok": False, "reason": f"failed to read status: {e}"}), 500
+
+    status["has_build"] = True
+    # Append ephemeral task metadata ONLY if it matches this genre — otherwise
+    # we'd leak another genre's in-flight details.
+    if _genre_task.get("genre_id") == gid:
+        status["task"] = {
+            k: _genre_task.get(k)
+            for k in ("running", "started_at", "finished_at", "ok",
+                      "error", "dry_run", "with_trial")
+        }
+    return jsonify(status)
+
+
+@app.get("/api/genres/<gid>/issues")
+def api_genre_issues(gid: str):
+    """Return the last N entries of genre_issues.jsonl as JSON.
+
+    A thin alternative to extending /api/file's sandbox to cover .build/.
+    Each entry has: severity, file, message, genre_id, [source].
+    Newest-first.
+    """
+    try:
+        gdir = _genre_dir(gid)
+    except ValueError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+    if not gdir.exists():
+        return jsonify({"ok": False, "reason": f"genre not found: {gid}"}), 404
+    try:
+        limit = max(1, min(int(request.args.get("limit", 10)), 200))
+    except (TypeError, ValueError):
+        limit = 10
+
+    issues_path = gdir / ".build" / "genre_issues.jsonl"
+    if not issues_path.exists():
+        return jsonify({"issues": [], "total": 0})
+
+    out: list[dict] = []
+    try:
+        for line in issues_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue  # skip corrupt lines; jsonl is append-only and may
+                          # momentarily have a partial last line during writes
+    except OSError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 500
+
+    out.reverse()  # newest first
+    return jsonify({"issues": out[:limit], "total": len(out)})
+
+
+@app.post("/api/genres/<gid>/abort")
+def api_genre_abort(gid: str):
+    """Set the genre pipeline CANCEL_EVENT. Worker stops at next phase boundary."""
+    from src.genre_pipeline import pipeline as gpipe
+    was_running = _genre_lock.locked()
+    gpipe.CANCEL_EVENT.set()
+    return jsonify({"ok": True, "aborted": True, "was_running": was_running})
+
+
+@app.delete("/api/genres/<gid>")
+def api_genre_delete(gid: str):
+    """Remove a genre directory. Refuses if any project still references it —
+    that would leave those projects un-bootstrappable.
+    """
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    import shutil
+    import yaml as _yaml
+    try:
+        gdir = _genre_dir(gid)
+    except ValueError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+    if not gdir.exists():
+        return jsonify({"ok": False, "reason": f"genre not found: {gid}"}), 404
+
+    # Dependent-project safety check
+    dependents = []
+    if config.PROJECTS_DIR.exists():
+        for pdir in config.PROJECTS_DIR.iterdir():
+            if not pdir.is_dir():
+                continue
+            pyaml = pdir / "project.yaml"
+            if not pyaml.exists():
+                continue
+            try:
+                data = _yaml.safe_load(pyaml.read_text(encoding="utf-8")) or {}
+            except (OSError, _yaml.YAMLError):
+                continue
+            if data.get("genre") == gid:
+                dependents.append(pdir.name)
+    if dependents:
+        return jsonify({
+            "ok": False,
+            "reason": f"genre {gid!r} still referenced by: {', '.join(dependents)}",
+            "dependents": dependents,
+        }), 409
+
+    shutil.rmtree(gdir)
+    return jsonify({"ok": True, "genre_id": gid})
+
+
+# ---------- genre views (server-rendered HTML) ----------
+@app.get("/genres")
+def view_genres_index():
+    return render_template("genres/index.html")
+
+
+@app.get("/genres/new")
+def view_genre_new():
+    return render_template("genres/new.html")
+
+
+@app.get("/genres/<gid>")
+def view_genre_detail(gid: str):
+    try:
+        gdir = _genre_dir(gid)
+    except ValueError:
+        abort(404)
+    if not gdir.exists():
+        abort(404)
+    return render_template("genres/detail.html", gid=gid)
+
+
+@app.get("/genres/<gid>/extract")
+def view_genre_extract_form(gid: str):
+    try:
+        gdir = _genre_dir(gid)
+    except ValueError:
+        abort(404)
+    if not gdir.exists():
+        abort(404)
+    return render_template("genres/extract.html", gid=gid)
+
+
+@app.get("/genres/<gid>/extract/progress")
+def view_genre_extract_progress(gid: str):
+    try:
+        gdir = _genre_dir(gid)
+    except ValueError:
+        abort(404)
+    if not gdir.exists():
+        abort(404)
+    return render_template("genres/progress.html", gid=gid)
 
 
 # ---------- errors ----------

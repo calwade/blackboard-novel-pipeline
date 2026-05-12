@@ -1,0 +1,44 @@
+{% extends "genres/_base.html" %}
+{% block title %}题材库 · Novelforge{% endblock %}
+
+{% block content %}
+<section class="genre-hero">
+  <div class="genre-hero-mark">◎</div>
+  <h1 class="genre-hero-title">题材库</h1>
+  <p class="genre-hero-sub">
+    题材 = 世界观事实 + 风格规范 + 特有铁律。<br />
+    多本书共享一份题材，<em class="hero-em">切一次，跑一批</em>。
+  </p>
+  <div class="genre-hero-actions">
+    <a class="btn btn-primary" href="/genres/new">
+      <span class="btn-glyph">＋</span>从零新建
+    </a>
+    <button class="btn" id="btn-extract-global" disabled title="先进入一个题材，再从小说拆解">
+      <span class="btn-glyph">⎇</span>从已有小说拆解
+    </button>
+  </div>
+</section>
+
+<section class="genre-grid-wrap">
+  <div class="col-header col-header-genres">
+    <span class="col-title">所有题材</span>
+    <span class="col-hint" id="genre-count">加载中…</span>
+  </div>
+  <div class="genre-grid" id="genre-grid">
+    <div class="genre-card genre-card-skel">
+      <div class="genre-card-skel-bar"></div>
+      <div class="genre-card-skel-bar"></div>
+      <div class="genre-card-skel-bar genre-card-skel-bar-short"></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='genres.js') }}" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.GenreUI && window.GenreUI.initIndex) window.GenreUI.initIndex();
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "genres/_base.html" %}
+{% block title %}{{ gid }} · 题材详情{% endblock %}
+{% block crumbs %}
+<a href="/">作品</a>
+<span class="crumb-sep">›</span>
+<a href="/genres">题材</a>
+<span class="crumb-sep">›</span>
+<span class="is-current">{{ gid }}</span>
+{% endblock %}
+
+{% block content %}
+<section class="genre-detail" data-gid="{{ gid }}">
+  <header class="genre-detail-head">
+    <div class="genre-detail-mark">◎</div>
+    <div class="genre-detail-text">
+      <div class="genre-detail-id">{{ gid }}</div>
+      <h1 class="genre-detail-title" id="gd-title">—</h1>
+      <div class="genre-detail-meta" id="gd-meta"></div>
+    </div>
+    <div class="genre-detail-actions">
+      <button class="btn" id="btn-audit"><span class="btn-glyph">◉</span>审查</button>
+      <button class="btn" id="btn-fill"><span class="btn-glyph">＋</span>补齐</button>
+      <a class="btn btn-primary" href="/genres/{{ gid }}/extract">
+        <span class="btn-glyph">⎇</span>从小说拆解
+      </a>
+      <button class="btn btn-danger" id="btn-delete" title="删除这个题材（如果没有作品依赖它）">
+        <span class="btn-glyph">✕</span>删除
+      </button>
+    </div>
+  </header>
+
+  <div class="genre-detail-grid">
+    <!-- LEFT: the 4 genre files -->
+    <div class="genre-panel">
+      <div class="genre-panel-head">
+        <h3 class="genre-panel-title">题材包文件</h3>
+        <p class="genre-panel-sub">跨所有作品共享。点击 → 查看路径 + 字符数。</p>
+      </div>
+      <ul class="genre-files" id="gd-files">
+        <li class="genre-files-skel">加载中…</li>
+      </ul>
+    </div>
+
+    <!-- RIGHT: build status + latest issues -->
+    <div class="genre-panel">
+      <div class="genre-panel-head">
+        <h3 class="genre-panel-title">最近构建状态</h3>
+        <p class="genre-panel-sub"><code>.build/build_status.yaml</code> 快照。仅存在于跑过 extract / audit 之后。</p>
+      </div>
+      <div class="genre-phases" id="gd-phases">
+        <div class="placeholder"><div class="placeholder-title">检查中…</div></div>
+      </div>
+      <div class="genre-inflight" id="gd-inflight" hidden></div>
+    </div>
+  </div>
+
+  <div class="genre-panel genre-panel-wide">
+    <div class="genre-panel-head">
+      <h3 class="genre-panel-title">最近 10 条审查问题</h3>
+      <p class="genre-panel-sub"><code>.build/genre_issues.jsonl</code> · 按严重程度着色</p>
+    </div>
+    <div class="genre-issues" id="gd-issues">
+      <div class="placeholder"><div class="placeholder-title">加载中…</div></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='genres.js') }}" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.GenreUI && window.GenreUI.initDetail) window.GenreUI.initDetail({{ gid|tojson }});
+  });
+</script>
+{% endblock %}

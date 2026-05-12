@@ -1,0 +1,83 @@
+{% extends "genres/_base.html" %}
+{% block title %}{{ gid }} · 拆解进度{% endblock %}
+{% block crumbs %}
+<a href="/">作品</a>
+<span class="crumb-sep">›</span>
+<a href="/genres">题材</a>
+<span class="crumb-sep">›</span>
+<a href="/genres/{{ gid }}">{{ gid }}</a>
+<span class="crumb-sep">›</span>
+<span class="is-current">进度</span>
+{% endblock %}
+
+{% block content %}
+<section class="genre-detail genre-progress" data-gid="{{ gid }}">
+  <header class="genre-detail-head">
+    <div class="genre-detail-mark genre-detail-mark-spin">◐</div>
+    <div class="genre-detail-text">
+      <div class="genre-detail-id">{{ gid }}</div>
+      <h1 class="genre-detail-title">构建进行中…</h1>
+      <div class="genre-detail-meta" id="gp-meta">连接…</div>
+    </div>
+    <div class="genre-detail-actions">
+      <button class="btn btn-danger" id="btn-abort"><span class="btn-glyph">⏹</span>中断</button>
+      <a class="btn" id="btn-back" href="/genres/{{ gid }}" hidden>
+        <span class="btn-glyph">←</span>返回详情
+      </a>
+    </div>
+  </header>
+
+  <div class="phase-timeline" id="phase-timeline">
+    <div class="phase" data-phase="extract">
+      <div class="phase-n">1</div>
+      <div class="phase-name">Extract</div>
+      <div class="phase-bar"><div class="phase-bar-fill"></div></div>
+      <div class="phase-detail">等待…</div>
+    </div>
+    <div class="phase" data-phase="merge">
+      <div class="phase-n">2</div>
+      <div class="phase-name">Merge</div>
+      <div class="phase-bar"><div class="phase-bar-fill"></div></div>
+      <div class="phase-detail">等待…</div>
+    </div>
+    <div class="phase" data-phase="draft">
+      <div class="phase-n">3</div>
+      <div class="phase-name">Draft</div>
+      <div class="phase-bar"><div class="phase-bar-fill"></div></div>
+      <div class="phase-detail">等待…</div>
+    </div>
+    <div class="phase" data-phase="validate">
+      <div class="phase-n">4</div>
+      <div class="phase-name">Validate</div>
+      <div class="phase-bar"><div class="phase-bar-fill"></div></div>
+      <div class="phase-detail">等待…</div>
+    </div>
+  </div>
+
+  <div class="genre-inflight genre-inflight-prominent" id="gp-inflight" hidden>
+    <div class="inflight-pulse"></div>
+    <div class="inflight-text">
+      <div class="inflight-agent" id="gp-agent">—</div>
+      <div class="inflight-meta" id="gp-agent-meta"></div>
+    </div>
+  </div>
+
+  <div class="genre-panel">
+    <div class="genre-panel-head">
+      <h3 class="genre-panel-title">完成 · 汇总</h3>
+    </div>
+    <div class="genre-finish" id="gp-finish">
+      <div class="placeholder"><div class="placeholder-title">正在跑…</div></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='genres.js') }}" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.GenreUI && window.GenreUI.initProgress) window.GenreUI.initProgress({{ gid|tojson }});
+  });
+</script>
+{% endblock %}
