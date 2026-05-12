@@ -469,6 +469,66 @@ def api_project_extract_progress(pid: str):
     return jsonify({**job, "project_id": pid})
 
 
+@app.post("/api/projects/<pid>/extract-genre")
+def api_project_extract_genre(pid: str):
+    """Post-creation 'overwrite genre config' — re-run extraction into an
+    existing book, rewriting its state/era.md + style/laws files in place.
+
+    Async: validates synchronously, then spawns a daemon thread running
+    to_project.extract_to_project. If the book is currently the active
+    project, the worker also re-bootstraps so state/ picks up the new
+    genre files immediately. Caller polls /extract-genre/progress.
+    """
+    if READONLY_MODE:
+        return jsonify({"ok": False, "reason": "readonly_mode"}), 403
+    project_dir = config.PROJECTS_DIR / pid
+    if not project_dir.exists():
+        return jsonify({"ok": False, "reason": "project not found"}), 404
+    body = request.get_json(silent=True) or {}
+    sources = body.get("sources") or []
+    if not sources:
+        return jsonify({"ok": False, "reason": "sources required"}), 400
+    with_trial = bool(body.get("with_trial", False))
+
+    with _PROJECT_JOB_LOCK:
+        if pid in _PROJECT_JOBS and _PROJECT_JOBS[pid].get("state") == "running":
+            return jsonify({"ok": False, "reason": "job already running"}), 409
+        _PROJECT_JOBS[pid] = {"state": "running", "error": None}
+
+    def _worker():
+        try:
+            # Import lazily so tests can monkeypatch the module attr.
+            from src.genre_extractor import to_project
+            to_project.extract_to_project(pid, sources=sources, with_trial=with_trial)
+            if config.get_active_project_id() == pid:
+                from src import bootstrap
+                bootstrap.bootstrap_project(pid, preserve_progress=True)
+            with _PROJECT_JOB_LOCK:
+                _PROJECT_JOBS[pid] = {"state": "done", "error": None}
+        except Exception as e:
+            with _PROJECT_JOB_LOCK:
+                _PROJECT_JOBS[pid] = {"state": "failed", "error": str(e)}
+
+    try:
+        threading.Thread(target=_worker, daemon=True).start()
+    except BaseException:
+        with _PROJECT_JOB_LOCK:
+            _PROJECT_JOBS[pid] = {"state": "failed", "error": "thread spawn failed"}
+        raise
+    return jsonify({"ok": True, "state": "running"}), 202
+
+
+@app.post("/api/projects/<pid>/extract-genre/abort")
+def api_project_extract_abort(pid: str):
+    """Soft abort: flip job state so UI stops polling. Extraction may still
+    complete in the background thread (cooperative cancellation not plumbed
+    through Blackboard yet)."""
+    with _PROJECT_JOB_LOCK:
+        if pid in _PROJECT_JOBS:
+            _PROJECT_JOBS[pid] = {"state": "aborted", "error": None}
+    return jsonify({"ok": True})
+
+
 # ---------- project file editing ----------
 _PROJECT_EDITABLE = {"project.yaml", "outline.json", "characters.yaml", "timeline.yaml"}
 
