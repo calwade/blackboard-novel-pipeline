@@ -13,7 +13,7 @@ projects/*/state/
 # for the GitHub Pages static demo. Root-level demo_snapshot*/ was a duplicate
 # of the docs/ copies and got deleted on 2026-05-11.
 
-genres/*/.build/
+presets/*/.build/
 # novels/ at repo root is ignored (local novel source material, usually
 # copyrighted). Use a leading slash so this doesn't match web/templates/novels/
 # or similar subdir patterns.

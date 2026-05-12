@@ -59,3 +59,14 @@ def test_projects_yaml_uses_source_preset(pid: str, expected_preset: str):
     data = yaml.safe_load((REPO / "projects" / pid / "project.yaml").read_text(encoding="utf-8"))
     assert data.get("source_preset") == expected_preset
     assert "genre" not in data
+
+
+def test_gitignore_uses_presets():
+    text = (REPO / ".gitignore").read_text(encoding="utf-8")
+    assert "presets/*/.build/" in text
+    # No stale "genres/..." lines (but allow "genres" appearing in prose comments)
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        assert not stripped.startswith("genres"), f"stale genres line in .gitignore: {line}"
