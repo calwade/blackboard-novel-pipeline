@@ -11,6 +11,7 @@ The build workspace lives at genres/<id>/.build/ and is git-ignored.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -18,6 +19,22 @@ from src import config
 from src.core.blackboard import Blackboard
 from src.genre_pipeline import adaptive, chapter_detector, schemas
 from src.genre_pipeline.chapter_stream import ChapterStream
+
+
+# ---------------------------------------------------------------
+# Cooperative cancellation (used by web abort button + intent router)
+# Mirrors src/pipeline.py::CANCEL_EVENT.
+# ---------------------------------------------------------------
+CANCEL_EVENT = threading.Event()
+
+
+class GenrePipelineAborted(RuntimeError):
+    """Raised when CANCEL_EVENT is set between stages."""
+
+
+def _check_cancel() -> None:
+    if CANCEL_EVENT.is_set():
+        raise GenrePipelineAborted("genre pipeline aborted by cancel signal")
 
 
 STUB_GENRE_YAML = """# Genre: {genre_id}
