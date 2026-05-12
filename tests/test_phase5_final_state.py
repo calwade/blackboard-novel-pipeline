@@ -65,3 +65,18 @@ def test_presets_readme_describes_seed_only():
     assert "preset" in text.lower() or "预设" in text
     # preset only acts at new-project time
     assert "运行时不参与" in text or "运行时不" in text
+
+
+def test_web_ui_guide_routes_point_to_presets():
+    text = (REPO / "docs" / "web-ui-guide.md").read_text(encoding="utf-8")
+    # No stale /genres routes mentioned in URL tables
+    assert "/genres" not in text
+    # /presets is documented
+    assert "/presets" in text
+    # Draft endpoints
+    assert "draft-outline" in text
+    assert "draft-characters" in text
+    # 4-step wizard mentioned
+    assert "4 步" in text or "四步" in text
+    # extract-genre endpoint
+    assert "extract-genre" in text
