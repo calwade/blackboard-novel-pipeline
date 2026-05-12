@@ -244,9 +244,62 @@ def _run_extract(bb: Blackboard, source_streams):
 
 
 def _run_merge(bb: Blackboard):
-    """Concatenate all batch notes into latest_merged.yaml. No LLM in v1."""
+    """Three-tier merge: batch → arc → book-level latest_merged.yaml.
+
+    Regimes (drives LLM call count):
+      ≤ ARC_BATCH_COUNT batches    → pure concat, 0 LLM calls (short book)
+      5 – 4×ARC_BATCH_COUNT batches → arc tier only, ≥2 arc_merger calls
+      > 4×ARC_BATCH_COUNT batches  → arc tier + 1 book_distiller call (long book)
+
+    With ARC_BATCH_COUNT=4 (from arc_merger.py) this maps cleanly to the
+    adaptive batch-size rules:
+      50 ch  / bs=10 →  5 batches → 2 arcs, no distill
+      400 ch / bs=25 → 16 batches → 4 arcs + 1 distill
+      1000ch / bs=40 → 25 batches → 6-7 arcs + 1 distill
+
+    Complements the 2-step summarizer pattern from
+    src/agents/multi_level_summarizer.py but scoped to extraction notes.
+    """
+    from src.genre_pipeline.agents.arc_merger import (
+        ARC_BATCH_COUNT, GenreArcMerger,
+    )
+
     schemas.update_phase_status(bb, phase="merge", status="in_progress")
     notes = bb.list_files("extraction_notes", "batch-*.yaml")
+    batch_ids = sorted(
+        bid for bid in (_parse_batch_id(p.name) for p in notes) if bid is not None
+    )
+
+    if len(batch_ids) <= ARC_BATCH_COUNT:
+        # Regime 1: pure concat, no LLM. Preserves the historical v1 behavior
+        # for short books where arc-level summarization buys no context relief.
+        _run_merge_concat(bb, notes)
+    else:
+        # Regime 2 & 3: arc tier (always), book distill (when arcs ≥ 2).
+        _run_merge_multitier(bb, batch_ids)
+
+    # Health dashboard — best-effort. Keeps signature stable for intent-router.
+    try:
+        from src.genre_pipeline.tally import generate_extraction_tally
+        status = bb.read_yaml("build_status.yaml")
+        genre_id = (status or {}).get("genre_id", "unknown")
+        tally_md = generate_extraction_tally(bb, genre_id)
+        bb.write_text("extraction_tally.md", tally_md)
+    except Exception:
+        pass
+
+    schemas.update_phase_status(bb, phase="merge", status="done")
+
+
+def _parse_batch_id(fname: str) -> int | None:
+    """batch-NNN.yaml → NNN. Returns None if not matching."""
+    import re as _re
+    m = _re.match(r"batch-(\d+)\.yaml$", fname)
+    return int(m.group(1)) if m else None
+
+
+def _run_merge_concat(bb: Blackboard, notes):
+    """Short-book fallback: concat all batch notes without LLM."""
     merged = {
         "merged_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "batches": [p.name for p in notes],
@@ -271,20 +324,58 @@ def _run_merge(bb: Blackboard):
             merged[key].extend(note.get(key, []))
     bb.write_yaml("extraction_notes/latest_merged.yaml", merged)
 
-    # Generate human-readable health dashboard. genre_id is read from
-    # build_status rather than added as a parameter, keeping _run_merge's
-    # signature stable for intent-router callers.
-    try:
-        from src.genre_pipeline.tally import generate_extraction_tally
-        status = bb.read_yaml("build_status.yaml")
-        genre_id = (status or {}).get("genre_id", "unknown")
-        tally_md = generate_extraction_tally(bb, genre_id)
-        bb.write_text("extraction_tally.md", tally_md)
-    except Exception:
-        # Tally is a nice-to-have; its failure must not block the merge phase.
-        pass
 
-    schemas.update_phase_status(bb, phase="merge", status="done")
+def _run_merge_multitier(bb: Blackboard, batch_ids: list[int]):
+    """Long-book 3-tier merge. Assumes len(batch_ids) > ARC_BATCH_COUNT.
+
+    Groups batches into arcs of ARC_BATCH_COUNT and calls GenreArcMerger once
+    per group. If ≥2 arcs result, calls GenreBookDistiller once to produce
+    the final latest_merged. If exactly 1 arc would result (shouldn't given
+    our guard above), promotes that arc directly; if exactly 2 arcs, we
+    consolidate the last arc as latest_merged to avoid an extra LLM call
+    when the compression ratio is low.
+    """
+    from src.genre_pipeline.agents.arc_merger import (
+        ARC_BATCH_COUNT, GenreArcMerger,
+    )
+    from src.genre_pipeline.agents.book_distiller import GenreBookDistiller
+
+    arc_merger = GenreArcMerger()
+    arc_ids: list[int] = []
+
+    # Chunk batches into ARC_BATCH_COUNT-sized groups.
+    for arc_idx, start in enumerate(range(0, len(batch_ids), ARC_BATCH_COUNT), start=1):
+        group = batch_ids[start:start + ARC_BATCH_COUNT]
+        arc_merger.run(bb, arc_id=arc_idx, batch_ids=group)
+        arc_ids.append(arc_idx)
+
+    if len(arc_ids) == 1:
+        # Theoretically unreachable given the ≤ARC_BATCH_COUNT guard, but
+        # defensive: promote the single arc directly.
+        arc_yaml = bb.read_yaml(f"extraction_notes/arcs/arc-{arc_ids[0]:03d}.yaml")
+        arc_yaml.setdefault("distilled_from_arcs", list(arc_ids))
+        bb.write_yaml("extraction_notes/latest_merged.yaml", arc_yaml)
+        return
+
+    # Threshold: distill only when arcs ≥ BOOK_ARC_THRESHOLD.
+    # With 2-3 arcs, the last arc's note already represents a fully-merged
+    # view (arcs aren't independent — each reads its neighbors' notes) so we
+    # promote the final arc directly and save an LLM call.
+    # With ≥ BOOK_ARC_THRESHOLD arcs, run the distiller to aggressively
+    # deduplicate across arcs.
+    if len(arc_ids) < BOOK_ARC_THRESHOLD:
+        final_arc = arc_ids[-1]
+        arc_yaml = bb.read_yaml(f"extraction_notes/arcs/arc-{final_arc:03d}.yaml")
+        arc_yaml.setdefault("distilled_from_arcs", list(arc_ids))
+        bb.write_yaml("extraction_notes/latest_merged.yaml", arc_yaml)
+        return
+
+    GenreBookDistiller().run(bb, arc_ids=arc_ids)
+
+
+# Threshold for book-level distill: ≥ 4 arcs → distill. Below that, the
+# last arc is promoted to latest_merged directly. See _run_merge_multitier.
+BOOK_ARC_THRESHOLD = 4
 
 
 def _run_draft(bb: Blackboard, genre_id: str):
