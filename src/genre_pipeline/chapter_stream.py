@@ -16,6 +16,15 @@ For small files (< threshold) we use the existing fast path: read the
 whole text into memory and slice by chapter offsets. Behaviour matches
 the pre-streaming implementation.
 
+Encoding robustness (defensive fallback):
+  Web upload normalises non-UTF-8 files to UTF-8 on disk, so normally
+  everything in novels/ is UTF-8. But users can drop GBK/Big5 files
+  straight in via CLI or rsync. We detect encoding up front. If the file
+  is NOT UTF-8, we load it entirely, decode with the detected encoding,
+  and re-encode into a temp UTF-8 file for streaming indexing. Byte
+  offsets in chapter_refs then refer to the UTF-8 bytes, not the original
+  file, so read_batch stays consistent. Original file is never modified.
+
 NOTE: This module intentionally ships with a small, self-contained chapter
 detector ("第N章" regex). Once src.tools.chapter_detector lands, this
 should delegate to it.
@@ -23,6 +32,7 @@ should delegate to it.
 from __future__ import annotations
 
 import re
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +48,56 @@ _CHAPTER_MARKER_PATTERN_STR = re.compile(r"第[0-9零一二三四五六七八九
 _CHAPTER_MARKER_PATTERN_BYTES = re.compile(
     "第[0-9零一二三四五六七八九十百千]+章".encode("utf-8")
 )
+
+
+def _detect_and_decode(path: Path) -> tuple[str, str]:
+    """Return (decoded_text, detected_encoding).
+
+    Try UTF-8 first (with BOM). If that fails, use charset_normalizer on a
+    sample (up to 200KB head) to detect, then decode the whole file.
+
+    Used by both small-file fast path and the streaming path's one-time
+    encoding detection + temp-file conversion.
+    """
+    raw = path.read_bytes()
+    # 1. UTF-8 (with BOM variant) fast path
+    for enc in ("utf-8-sig", "utf-8"):
+        try:
+            return raw.decode(enc), "utf-8"
+        except UnicodeDecodeError:
+            continue
+    # 2. charset_normalizer detection
+    try:
+        from charset_normalizer import from_bytes
+
+        # Sample the head for detection; then decode the whole file with
+        # the detected encoding. 200KB sample is enough for GBK/Big5/Shift-JIS.
+        sample = raw[: 200 * 1024] if len(raw) > 200 * 1024 else raw
+        result = from_bytes(
+            sample,
+            cp_isolation=[
+                "gb18030", "gbk", "gb2312",
+                "big5", "big5hkscs",
+                "shift_jis", "euc_jp", "euc_kr",
+            ],
+        ).best()
+        if result is not None:
+            enc = result.encoding
+            # Decode the full file with the detected encoding; use replace
+            # so a few mojibake bytes don't sink the whole decode.
+            decoded = raw.decode(enc, errors="replace")
+            return decoded, enc
+    except ImportError:
+        pass
+    # 3. Fallback: try common CJK encodings in order
+    for enc in ("gb18030", "big5", "shift_jis"):
+        try:
+            decoded = raw.decode(enc, errors="strict")
+            return decoded, enc
+        except UnicodeDecodeError:
+            continue
+    # 4. Last resort: GB18030 with replace (covers simplified CJK)
+    return raw.decode("gb18030", errors="replace"), "gb18030"
 
 
 @dataclass
@@ -56,14 +116,25 @@ class ChapterStream:
         stream = ChapterStream("path/to/novel.txt")
         n = stream.total_chapters
         chunk = stream.read_batch(1, 25)   # read chapters 1..25 inclusive
+
+    The `detected_encoding` attribute reports what encoding the source
+    file was in ('utf-8' or the non-UTF-8 encoding we had to convert from).
     """
 
     def __init__(self, path: str | Path) -> None:
         p = Path(path)
         if not p.exists():
             raise FileNotFoundError(f"source novel not found: {p}")
-        self._path: Path = p
-        size = p.stat().st_size
+        self._source_path: Path = p
+        self._owned_tempfile: Path | None = None  # set if we created a UTF-8 copy
+
+        # Detect encoding. If non-UTF-8, convert to a temp UTF-8 file so the
+        # streaming/indexing path can work on consistent UTF-8 bytes.
+        self.detected_encoding: str = self._ensure_utf8_on_disk(p)
+
+        working_path = self._owned_tempfile or p
+        self._path: Path = working_path
+        size = working_path.stat().st_size
         self._file_size: int = size
         self._is_streaming: bool = size >= STREAMING_THRESHOLD_BYTES
 
@@ -76,8 +147,53 @@ class ChapterStream:
         if self._is_streaming:
             self._chapter_refs = self._build_index_streaming()
         else:
-            self._full_text = p.read_text(encoding="utf-8")
+            self._full_text = working_path.read_text(encoding="utf-8")
             self._chapter_refs = self._build_index_from_text(self._full_text)
+
+    def _ensure_utf8_on_disk(self, p: Path) -> str:
+        """If `p` is already UTF-8, return 'utf-8' (no tempfile).
+
+        If `p` is in another encoding, decode it, write a UTF-8 tempfile,
+        set self._owned_tempfile so cleanup knows to delete it, and return
+        the detected encoding name.
+
+        Whole-file load is acceptable here: non-UTF-8 novels are the exception
+        path, typically < 20MB, and we have to read the full file to re-encode
+        anyway.
+        """
+        # Quick UTF-8 probe: peek at first 64KB, strict decode
+        with p.open("rb") as f:
+            head = f.read(64 * 1024)
+        try:
+            head.decode("utf-8-sig" if head.startswith(b"\xef\xbb\xbf") else "utf-8")
+            return "utf-8"
+        except UnicodeDecodeError:
+            pass  # fall through to full detect + convert
+
+        decoded, encoding = _detect_and_decode(p)
+        # Write to a temp UTF-8 file
+        fd, tmp_name = tempfile.mkstemp(suffix=".utf8.txt", prefix="chstream_")
+        import os
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as tf:
+                tf.write(decoded)
+        except Exception:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+            raise
+        self._owned_tempfile = tmp_path
+        return encoding
+
+    def __del__(self):
+        # Best-effort cleanup of the temp UTF-8 file
+        if self._owned_tempfile is not None:
+            try:
+                self._owned_tempfile.unlink()
+            except (OSError, AttributeError):
+                pass
 
     # ---- public API -------------------------------------------------------
 
