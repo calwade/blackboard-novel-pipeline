@@ -70,3 +70,15 @@ def test_gitignore_uses_presets():
         if stripped.startswith("#"):
             continue
         assert not stripped.startswith("genres"), f"stale genres line in .gitignore: {line}"
+
+
+def test_presets_readme_exists():
+    assert (REPO / "presets" / "README.md").exists()
+    assert "题材预设库" in (REPO / "presets" / "README.md").read_text(encoding="utf-8")
+
+
+def test_projects_readme_no_genre_keyword():
+    t = (REPO / "projects" / "README.md").read_text(encoding="utf-8")
+    # "genre = X" YAML-ish patterns should be gone
+    assert "genre = " not in t
+    assert "source_preset" in t

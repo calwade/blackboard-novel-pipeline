@@ -21,7 +21,7 @@
 
 ```
 projects/<project-id>/
-├── project.yaml          # 必需 · 作品元信息（关键字段：genre = 所基于的题材 id）
+├── project.yaml          # 必需 · 作品元信息（关键字段：source_preset = 所基于的题材 id）
 ├── outline.json          # 必需 · 本书大纲 + 每章节拍
 ├── characters.yaml       # 必需 · 本书的人物档案
 ├── timeline.yaml         # 必需 · 本书的时间线
@@ -85,7 +85,7 @@ python3 -m src.bootstrap --new-project my-book --genre gangster-hk-1983
 
 ## 已提供的作品
 
-| 项目 id | 基于题材 | 主角 |
+| 项目 id | 基于 preset | 主角 |
 |---|---|---|
 | `gangster-hk-1983-linjiayao` | gangster-hk-1983 | 林家耀 |
 | `xianxia-ascension-peichangning` | xianxia-ascension | 裴长宁 |
