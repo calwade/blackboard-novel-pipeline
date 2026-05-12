@@ -16,7 +16,7 @@ from pathlib import Path
 
 from src import config
 from src.core.blackboard import Blackboard
-from src.genre_pipeline import adaptive, schemas
+from src.genre_pipeline import adaptive, chapter_detector, schemas
 from src.genre_pipeline.chapter_stream import ChapterStream
 
 
@@ -105,30 +105,38 @@ def new_genre(
 
 
 def _count_chapters_in_text(text: str) -> int:
-    """Very rough chapter detection for novel files. Supports '第N章' markers."""
-    import re
-    matches = re.findall(r"第[0-9零一二三四五六七八九十百千]+章", text)
-    return max(len(matches), 1)
+    """Delegate to chapter_detector; supports multi-format chapter markers."""
+    return chapter_detector.count_chapters(text)
 
 
 def _split_text_into_batches(
     text: str, total_chapters: int, batch_size: int
 ) -> list[str]:
-    """Split novel text roughly into N batches of ~batch_size chapters each.
+    """Split novel text into batches of exactly ``batch_size`` chapters each.
 
-    Uses character-count approximation when chapter markers aren't reliable.
+    Uses real chapter offsets from :mod:`chapter_detector` rather than the
+    old character-count approximation, so batch boundaries align with
+    chapter boundaries. When no markers are found the whole text is
+    returned as a single batch.
+
+    The ``total_chapters`` argument is accepted for backwards compatibility
+    but is not consulted — the detector is re-run to find actual offsets.
     """
-    batches = adaptive.split_into_batches(
-        total_chapters=total_chapters, batch_size=batch_size
-    )
-    if not batches:
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+    if not text:
         return []
-    chunk_len = len(text) // len(batches)
+
+    splits = chapter_detector.find_chapter_splits(text)
+    # splits[i] = start offset of chapter i+1; first is always 0. Append
+    # len(text) as a sentinel so we can take [splits[i], splits[i+1]) slices.
+    boundaries = splits + [len(text)]
+
     out: list[str] = []
-    for i in range(len(batches)):
-        start = i * chunk_len
-        end = (i + 1) * chunk_len if i < len(batches) - 1 else len(text)
-        out.append(text[start:end])
+    n_chapters = len(splits)
+    for start_ch in range(0, n_chapters, batch_size):
+        end_ch = min(start_ch + batch_size, n_chapters)
+        out.append(text[boundaries[start_ch]:boundaries[end_ch]])
     return out
 
 
