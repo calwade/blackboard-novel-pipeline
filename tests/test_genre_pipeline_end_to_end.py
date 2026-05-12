@@ -16,7 +16,7 @@ def test_end_to_end_dry_run(tmp_path, monkeypatch):
         "\n".join(f"第{i}章\n场景...对白..." for i in range(1, 11)), encoding="utf-8"
     )
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     out = pipeline.extract_from_novel(
         "e2e-dry",
         sources=[str(novel)],
@@ -41,7 +41,7 @@ def test_trial_rejects_unknown_genre(tmp_path):
     successful trial.)
     """
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.trial import run_trial
+    from src.genre_extractor.trial import run_trial
 
     bb = Blackboard(root=tmp_path)
     with pytest.raises((FileNotFoundError, ValueError)):
@@ -65,7 +65,7 @@ def test_audit_existing_genre_real(tmp_path, monkeypatch):
     shutil.copytree(real_genres / "gangster-hk-1983", tmp_path / "gangster-hk-1983")
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     # audit triggers Stage 1 (structure lint).
     # Stage 2 (LLM) is best-effort — if it raises it's logged as a warning, not a failure.
     out = pipeline.audit_genre("gangster-hk-1983")

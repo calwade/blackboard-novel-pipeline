@@ -17,7 +17,7 @@ import pytest
 
 def _make_stub_genre(tmp_path: Path, genre_id: str, era_content: str = "标准时代描述，无问题。\n"):
     """Seed a minimal valid genre dir with caller-controlled era.md."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre(genre_id, display_name="t", genre="x", era="y", tone="z")
     (tmp_path / genre_id / "era.md").write_text(era_content, encoding="utf-8")
 
@@ -33,7 +33,7 @@ def test_tier1_deny_scan_hits_chinese_phrase(tmp_path, monkeypatch):
         era_content="这是一个时代背景。总而言之，这个年代很特别。\n",
     )
 
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
     v = GenreValidator()
 
     issues = v._tier1_deny_scan("g-zh-deny")
@@ -57,7 +57,7 @@ def test_tier1_deny_scan_hits_english_phrase(tmp_path, monkeypatch):
         era_content="Background. In today's fast-paced world, things change.\n",
     )
 
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
     issues = GenreValidator()._tier1_deny_scan("g-en-deny")
 
     assert any("fast-paced world" in i["message"].lower() or "fast-paced" in i["message"] for i in issues), \
@@ -74,7 +74,7 @@ def test_tier1_deny_scan_returns_empty_on_clean_files(tmp_path, monkeypatch):
         era_content="一九八三年香港，街头小贩用粤语叫卖着猪肉粥。\n",
     )
 
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
     issues = GenreValidator()._tier1_deny_scan("g-clean")
 
     assert issues == [], f"clean file should return no hits, got {issues}"
@@ -99,7 +99,7 @@ def test_tier1_runs_before_stage2_in_validator_run(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat, raising=False)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
 
     bb = Blackboard(root=tmp_path / "g-combined" / ".build")
     GenreValidator().run(bb, genre_id="g-combined")

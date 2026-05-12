@@ -46,7 +46,7 @@ def _write_stub_arc(bb: Blackboard, arc_id: int, covered_batches: list[int]) -> 
 
 
 def test_book_distiller_instantiates():
-    from src.genre_pipeline.agents.book_distiller import GenreBookDistiller
+    from src.genre_extractor.agents.book_distiller import GenreBookDistiller
     a = GenreBookDistiller()
     assert a.name == "genre_book_distiller"
     assert a.response_format == "json"
@@ -54,7 +54,7 @@ def test_book_distiller_instantiates():
 
 
 def test_book_distiller_build_prompts_reads_all_arcs(bb):
-    from src.genre_pipeline.agents.book_distiller import GenreBookDistiller
+    from src.genre_extractor.agents.book_distiller import GenreBookDistiller
 
     _write_stub_arc(bb, 1, [1, 2, 3, 4])
     _write_stub_arc(bb, 2, [5, 6, 7, 8])
@@ -71,7 +71,7 @@ def test_book_distiller_build_prompts_reads_all_arcs(bb):
 
 
 def test_book_distiller_handle_output_writes_latest_merged(bb):
-    from src.genre_pipeline.agents.book_distiller import GenreBookDistiller
+    from src.genre_extractor.agents.book_distiller import GenreBookDistiller
 
     a = GenreBookDistiller()
     stub_json = (
@@ -90,7 +90,7 @@ def test_book_distiller_handle_output_writes_latest_merged(bb):
 
 
 def test_book_distiller_full_run_with_stub_llm(bb, monkeypatch):
-    from src.genre_pipeline.agents.book_distiller import GenreBookDistiller
+    from src.genre_extractor.agents.book_distiller import GenreBookDistiller
 
     _write_stub_arc(bb, 1, [1, 2, 3, 4])
     _write_stub_arc(bb, 2, [5, 6, 7, 8])
@@ -133,7 +133,7 @@ def test_book_distiller_full_run_with_stub_llm(bb, monkeypatch):
 
 def test_book_distiller_auto_discovers_arcs_when_no_arc_ids(bb, monkeypatch):
     """If arc_ids kwarg not provided, should auto-discover from arcs/ dir."""
-    from src.genre_pipeline.agents.book_distiller import GenreBookDistiller
+    from src.genre_extractor.agents.book_distiller import GenreBookDistiller
 
     _write_stub_arc(bb, 1, [1, 2, 3, 4])
     _write_stub_arc(bb, 2, [5, 6, 7, 8])

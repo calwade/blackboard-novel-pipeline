@@ -227,7 +227,7 @@ def build_genre_from_answers(answers: dict) -> dict:
 
     # Seed build_status in .build/
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline import schemas
+    from src.genre_extractor import schemas
 
     build_dir = genre_dir / ".build"
     build_dir.mkdir(parents=True, exist_ok=True)

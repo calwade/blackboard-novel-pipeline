@@ -10,7 +10,7 @@ def test_answers_to_survey_produces_genre_yaml(tmp_path, monkeypatch):
     """给定一组问卷答案，产出填满的 genre.yaml。"""
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
-    from src.genre_pipeline import interview
+    from src.genre_extractor import interview
 
     answers = {
         "id": "demo-interview",
@@ -49,7 +49,7 @@ def test_interview_validates_required_fields(tmp_path, monkeypatch):
     """缺必填字段就 raise。"""
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
-    from src.genre_pipeline import interview
+    from src.genre_extractor import interview
 
     with pytest.raises(ValueError, match="id"):
         interview.build_genre_from_answers({})
@@ -63,7 +63,7 @@ def test_interview_refuses_existing(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
     (tmp_path / "taken").mkdir()
 
-    from src.genre_pipeline import interview
+    from src.genre_extractor import interview
     with pytest.raises(FileExistsError):
         interview.build_genre_from_answers({
             "id": "taken",
@@ -76,7 +76,7 @@ def test_interview_produces_richer_than_stub(tmp_path, monkeypatch):
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline, interview
+    from src.genre_extractor import pipeline, interview
 
     # 跑一份纯 stub
     pipeline.new_genre("pure-stub", display_name="PS", genre="g", era="e", tone="t")
@@ -105,7 +105,7 @@ def test_cli_interactive_flag_exists():
     """CLI 必须接受 --interactive 标志."""
     import subprocess, sys
     p = subprocess.run(
-        [sys.executable, "-m", "src.genre_pipeline", "--help"],
+        [sys.executable, "-m", "src.genre_extractor", "--help"],
         capture_output=True, text=True, timeout=20,
     )
     assert p.returncode == 0

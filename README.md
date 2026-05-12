@@ -204,10 +204,10 @@ CLI 和 Web **调用同一套 Python 函数**（`src.bootstrap.bootstrap_project
 
 | 入口 | 命令 | 用途 | 调 LLM |
 |---|---|---|---|
-| 从零手建 | `python -m src.genre_pipeline --new-genre <id> [--interactive]` | 脚手架 / 问卷式初稿 | 否 |
-| 补齐缺失 | `python -m src.genre_pipeline --fill-genre <id>` | 补 stub 文件 | 否 |
-| 审查 | `python -m src.genre_pipeline --audit-genre <id>` | 结构 + LLM 语义双校验 | 是（1-3 次） |
-| 从小说拆解 | `python -m src.genre_pipeline --extract-from-novel <id> --sources a.txt,b.txt [--with-trial]` | **核心场景** · 读 N 本原著反推题材规范 | 是（几十-几百次） |
+| 从零手建 | `python -m src.genre_extractor --new-genre <id> [--interactive]` | 脚手架 / 问卷式初稿 | 否 |
+| 补齐缺失 | `python -m src.genre_extractor --fill-genre <id>` | 补 stub 文件 | 否 |
+| 审查 | `python -m src.genre_extractor --audit-genre <id>` | 结构 + LLM 语义双校验 | 是（1-3 次） |
+| 从小说拆解 | `python -m src.genre_extractor --extract-from-novel <id> --sources a.txt,b.txt [--with-trial]` | **核心场景** · 读 N 本原著反推题材规范 | 是（几十-几百次） |
 
 断点续跑单个 phase：`--extract-only` / `--merge-only` / `--draft-only` / `--validate-only`。
 
@@ -272,7 +272,7 @@ novelforge/
 │   │   └── base_agent.py            # 所有 Agent 的基类（双流水线共享）
 │   ├── agents/                      # 作品流水线：5 创作 + 3 记账 Agent
 │   ├── auditors/                    # 作品流水线：3 后台审计 Agent（含 FactChecker）
-│   ├── genre_pipeline/              # 题材流水线
+│   ├── genre_extractor/             # 题材流水线
 │   │   ├── pipeline.py / __main__.py # 主调度 + CLI
 │   │   ├── schemas.py / adaptive.py / chapter_detector.py / chapter_stream.py
 │   │   ├── tally.py / trial.py / interview.py

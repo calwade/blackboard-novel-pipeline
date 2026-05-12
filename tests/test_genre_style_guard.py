@@ -14,7 +14,7 @@ import pytest
 
 
 def _seed_genre(tmp_path: Path, genre_id: str, *, style: str | None = None) -> Path:
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre(genre_id, display_name="t", genre="x", era="y", tone="z")
     if style is not None:
         (tmp_path / genre_id / "writing-style-extra.md").write_text(
@@ -24,7 +24,7 @@ def _seed_genre(tmp_path: Path, genre_id: str, *, style: str | None = None) -> P
 
 
 def test_style_guard_instantiates():
-    from src.genre_pipeline.auditors.genre_style_guard import GenreStyleGuard
+    from src.genre_extractor.auditors.genre_style_guard import GenreStyleGuard
     a = GenreStyleGuard()
     assert a.name == "genre_style_guard"
     assert a.temperature == 0.2
@@ -37,7 +37,7 @@ def test_style_guard_build_prompts_reads_style_files(tmp_path, monkeypatch):
     _seed_genre(tmp_path, "g-sg-1", style="# Style\n要简洁。\n")
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_style_guard import GenreStyleGuard
+    from src.genre_extractor.auditors.genre_style_guard import GenreStyleGuard
 
     bb = Blackboard(root=tmp_path / "g-sg-1" / ".build")
     system, user, inputs_read = GenreStyleGuard()._build_prompts(
@@ -56,7 +56,7 @@ def test_style_guard_handle_output_tags_source(tmp_path, monkeypatch):
     _seed_genre(tmp_path, "g-sg-2")
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_style_guard import GenreStyleGuard
+    from src.genre_extractor.auditors.genre_style_guard import GenreStyleGuard
 
     bb = Blackboard(root=tmp_path / "g-sg-2" / ".build")
     raw = (
@@ -93,7 +93,7 @@ def test_style_guard_full_run_with_stub_llm(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_style_guard import GenreStyleGuard
+    from src.genre_extractor.auditors.genre_style_guard import GenreStyleGuard
 
     bb = Blackboard(root=tmp_path / "g-sg-3" / ".build")
     GenreStyleGuard().run(bb, genre_id="g-sg-3")

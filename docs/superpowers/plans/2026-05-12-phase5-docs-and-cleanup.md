@@ -44,7 +44,7 @@ def test_readme_describes_single_workflow():
     assert "preset" in text.lower() or "预设" in text
     # Must no longer describe genre_pipeline as a peer to the novel pipeline
     assert "题材流水线" not in text or "（原题材流水线，已合并" in text
-    assert "src/genre_pipeline" not in text
+    assert "src/genre_extractor" not in text
 
 
 def test_readme_mentions_4_step_wizard():
@@ -56,7 +56,7 @@ def test_readme_cli_refers_to_new_commands():
     text = (REPO / "README.md").read_text(encoding="utf-8")
     assert "--extract-genre" in text
     assert "python -m src.genre_extractor --to-preset" in text
-    assert "python -m src.genre_pipeline" not in text
+    assert "python -m src.genre_extractor" not in text
 ```
 
 - [ ] **Step 2:** 跑失败确认
@@ -209,7 +209,7 @@ def test_presets_readme_describes_seed_only():
 - State 地图：移除"题材层拷入"/"作品层拷入"列，改为单列"来源"
 - Agent 名册：追加 OutlineDrafter / CharactersDrafter（单次 LLM 调用，向导用）
 - Bootstrap 描述：改为"只拷 projects/<id>/ 顶层文件到 state/ + 合成 setting.yaml"
-- 删除对 `src/genre_pipeline` 的任何残留引用；改 `src/genre_extractor`
+- 删除对 `src/genre_extractor` 的任何残留引用；改 `src/genre_extractor`
 
 - [ ] **Step 4:** 重写 `projects/README.md`：删除"基于哪个 genre"所有叙事，改为：
   - 一本书 = 这个目录下的全部
@@ -318,7 +318,7 @@ git rm scripts/migrate_to_book_centric.py tests/test_migration_script.py
 
 ### Breaking
 - `genres/` 目录删除；题材 4 份文件下沉到 `projects/<book-id>/` 根目录
-- `src/genre_pipeline/` 重命名为 `src/genre_extractor/`；CLI 入口改为 `--to-preset`
+- `src/genre_extractor/` 重命名为 `src/genre_extractor/`；CLI 入口改为 `--to-preset`
 - `src/pipeline.py` 新增 `--extract-genre <book-id> --sources ...`
 - Web `/genres*` 路由全部删除，替换为 `/presets*`；新建 preset 仅通过"从原著拆"入口
 - `config.GENRES_DIR` 删除；改用 `config.PRESETS_DIR`
@@ -401,7 +401,7 @@ def test_cli_genre_extractor_help_mentions_to_preset():
 
 
 def test_no_references_to_genre_pipeline_outside_history():
-    """src.genre_pipeline must not appear anywhere except CHANGELOG and docs/history/."""
+    """src.genre_extractor must not appear anywhere except CHANGELOG and docs/history/."""
     import subprocess
     r = subprocess.run(
         ["git", "grep", "-l", "genre_pipeline"],

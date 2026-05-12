@@ -17,8 +17,8 @@ from pathlib import Path
 
 from src import config
 from src.core.blackboard import Blackboard
-from src.genre_pipeline import adaptive, chapter_detector, schemas
-from src.genre_pipeline.chapter_stream import ChapterStream
+from src.genre_extractor import adaptive, chapter_detector, schemas
+from src.genre_extractor.chapter_stream import ChapterStream
 
 
 # ---------------------------------------------------------------
@@ -241,7 +241,7 @@ def _run_extract(bb: Blackboard, source_streams):
     batch's text is loaded lazily via stream.read_batch() so peak RAM stays
     bounded regardless of novel size.
     """
-    from src.genre_pipeline.agents.extractor import GenreExtractor
+    from src.genre_extractor.agents.extractor import GenreExtractor
 
     schemas.update_phase_status(bb, phase="extract", status="in_progress")
     agent = GenreExtractor()
@@ -277,7 +277,7 @@ def _run_merge(bb: Blackboard):
     Complements the 2-step summarizer pattern from
     src/agents/multi_level_summarizer.py but scoped to extraction notes.
     """
-    from src.genre_pipeline.agents.arc_merger import (
+    from src.genre_extractor.agents.arc_merger import (
         ARC_BATCH_COUNT, GenreArcMerger,
     )
 
@@ -297,7 +297,7 @@ def _run_merge(bb: Blackboard):
 
     # Health dashboard — best-effort. Keeps signature stable for intent-router.
     try:
-        from src.genre_pipeline.tally import generate_extraction_tally
+        from src.genre_extractor.tally import generate_extraction_tally
         status = bb.read_yaml("build_status.yaml")
         genre_id = (status or {}).get("genre_id", "unknown")
         tally_md = generate_extraction_tally(bb, genre_id)
@@ -352,10 +352,10 @@ def _run_merge_multitier(bb: Blackboard, batch_ids: list[int]):
     consolidate the last arc as latest_merged to avoid an extra LLM call
     when the compression ratio is low.
     """
-    from src.genre_pipeline.agents.arc_merger import (
+    from src.genre_extractor.agents.arc_merger import (
         ARC_BATCH_COUNT, GenreArcMerger,
     )
-    from src.genre_pipeline.agents.book_distiller import GenreBookDistiller
+    from src.genre_extractor.agents.book_distiller import GenreBookDistiller
 
     arc_merger = GenreArcMerger()
     arc_ids: list[int] = []
@@ -396,7 +396,7 @@ BOOK_ARC_THRESHOLD = 4
 
 
 def _run_draft(bb: Blackboard, genre_id: str):
-    from src.genre_pipeline.agents.drafter import GenreDrafter
+    from src.genre_extractor.agents.drafter import GenreDrafter
 
     schemas.update_phase_status(bb, phase="draft", status="in_progress")
     bb.write_yaml("genre_blueprint.yaml", schemas.make_empty_blueprint(genre_id=genre_id))
@@ -442,7 +442,7 @@ def _run_validate(bb: Blackboard, genre_id: str, *, with_trial: bool,
 
     Stage 3 (trial) runs only at the end if with_trial=True.
     """
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
 
     schemas.update_phase_status(bb, phase="validate", status="in_progress")
 
@@ -488,7 +488,7 @@ def _run_validate(bb: Blackboard, genre_id: str, *, with_trial: bool,
 
     # Stage 3: trial (optional), runs after the fix loop stabilized (or gave up)
     if with_trial:
-        from src.genre_pipeline import trial
+        from src.genre_extractor import trial
         trial.run_trial(genre_id, bb)
 
     schemas.update_phase_status(bb, phase="validate", status="done")
@@ -500,7 +500,7 @@ def _apply_fixer_round(bb: Blackboard, genre_id: str, errors: list) -> None:
     Fixer silently skips files that can't be resolved from `file` metadata
     (e.g. "(validator)", "(structure)") — those are not individual files.
     """
-    from src.genre_pipeline.agents.fixer import GenreFixer
+    from src.genre_extractor.agents.fixer import GenreFixer
 
     by_file: dict[str, list] = {}
     for issue in errors:

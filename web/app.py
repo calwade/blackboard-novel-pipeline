@@ -737,7 +737,7 @@ def api_status():
 # extract doesn't block a novel chapter run (different sandboxes).
 #
 # Cancellation: we mirror the novel pipeline's pattern — a module-level
-# CANCEL_EVENT on src.genre_pipeline.pipeline, checked at phase boundaries.
+# CANCEL_EVENT on src.genre_extractor.pipeline, checked at phase boundaries.
 _genre_lock = threading.Lock()
 _genre_task: dict = {"running": False}
 
@@ -757,7 +757,7 @@ def api_genre_new():
     if not gid:
         return jsonify({"ok": False, "reason": "id required"}), 400
 
-    from src.genre_pipeline import pipeline as gpipe
+    from src.genre_extractor import pipeline as gpipe
     from src import bootstrap as _bs
     # Validate id up-front for a clean 400 (new_genre would also raise, but
     # its ValueError currently comes from the filesystem layer — less tidy).
@@ -788,7 +788,7 @@ def api_genre_fill(gid: str):
     gdir = _genre_dir(gid)
     if not gdir.exists():
         return jsonify({"ok": False, "reason": f"genre not found: {gid}"}), 404
-    from src.genre_pipeline import pipeline as gpipe
+    from src.genre_extractor import pipeline as gpipe
     try:
         return jsonify(gpipe.fill_genre(gid))
     except FileNotFoundError as e:
@@ -807,7 +807,7 @@ def api_genre_audit(gid: str):
         _genre_dir(gid)
     except ValueError as e:
         return jsonify({"ok": False, "reason": str(e)}), 400
-    from src.genre_pipeline import pipeline as gpipe
+    from src.genre_extractor import pipeline as gpipe
     try:
         return jsonify(gpipe.audit_genre(gid))
     except (ValueError, OSError) as e:
@@ -846,7 +846,7 @@ def api_genre_extract(gid: str):
     if not _genre_lock.acquire(blocking=False):
         return jsonify({"started": False, "reason": "genre pipeline already running"}), 409
 
-    from src.genre_pipeline import pipeline as gpipe
+    from src.genre_extractor import pipeline as gpipe
     gpipe.CANCEL_EVENT.clear()
 
     started_at = time.time()
@@ -990,7 +990,7 @@ def api_genre_issues(gid: str):
 @app.post("/api/genres/<gid>/abort")
 def api_genre_abort(gid: str):
     """Set the genre pipeline CANCEL_EVENT. Worker stops at next phase boundary."""
-    from src.genre_pipeline import pipeline as gpipe
+    from src.genre_extractor import pipeline as gpipe
     was_running = _genre_lock.locked()
     gpipe.CANCEL_EVENT.set()
     return jsonify({"ok": True, "aborted": True, "was_running": was_running})
@@ -1353,7 +1353,7 @@ def _estimate_chapters(path: Path) -> tuple[int, str]:
     can't be decoded as UTF-8, return (1, 'none') — count_chapters's default
     for unparseable input.
     """
-    from src.genre_pipeline import chapter_detector, chapter_stream
+    from src.genre_extractor import chapter_detector, chapter_stream
     try:
         size = path.stat().st_size
     except OSError:

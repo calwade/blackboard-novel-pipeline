@@ -65,7 +65,7 @@ def test_validate_no_errors_no_fixer(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
     # Create a minimal genre pack so setting_lint doesn't explode
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre("g-clean", display_name="clean", genre="x", era="y", tone="z")
 
     # All 3 auditors return zero issues
@@ -95,7 +95,7 @@ def test_validate_ships_debt_after_max_retries(tmp_path, monkeypatch):
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre("g-stubborn", display_name="s", genre="x", era="y", tone="z")
 
     # Write something to era.md so Fixer has a real file to touch
@@ -142,7 +142,7 @@ def test_validate_recovers_on_second_attempt(tmp_path, monkeypatch):
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre("g-recovering", display_name="r", genre="x", era="y", tone="z")
     (tmp_path / "g-recovering" / "era.md").write_text("bad\n", encoding="utf-8")
 
@@ -184,7 +184,7 @@ def test_apply_fixer_round_skips_meta_files(tmp_path, monkeypatch):
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre("g-meta", display_name="m", genre="x", era="y", tone="z")
 
     calls = _install_fake_llm(monkeypatch, {

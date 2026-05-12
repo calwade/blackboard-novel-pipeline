@@ -22,7 +22,7 @@ def bb(tmp_path: Path) -> Blackboard:
 
 
 def test_extractor_calls_llm_exactly_twice(bb, monkeypatch):
-    from src.genre_pipeline.agents.extractor import GenreExtractor
+    from src.genre_extractor.agents.extractor import GenreExtractor
 
     calls: list[dict] = []
 
@@ -64,7 +64,7 @@ def test_extractor_calls_llm_exactly_twice(bb, monkeypatch):
 
 
 def test_extractor_first_call_is_free_notes_text(bb, monkeypatch):
-    from src.genre_pipeline.agents.extractor import GenreExtractor
+    from src.genre_extractor.agents.extractor import GenreExtractor
 
     calls: list[dict] = []
 
@@ -91,7 +91,7 @@ def test_extractor_first_call_is_free_notes_text(bb, monkeypatch):
 
 
 def test_extractor_second_call_is_verbatim_json_zero_temp(bb, monkeypatch):
-    from src.genre_pipeline.agents.extractor import GenreExtractor
+    from src.genre_extractor.agents.extractor import GenreExtractor
 
     FREE_NOTES_MARKER = "UNIQUE_NOTES_MARKER_12345"
 
@@ -123,7 +123,7 @@ def test_extractor_second_call_is_verbatim_json_zero_temp(bb, monkeypatch):
 
 
 def test_extractor_writes_yaml_file(bb, monkeypatch):
-    from src.genre_pipeline.agents.extractor import GenreExtractor
+    from src.genre_extractor.agents.extractor import GenreExtractor
 
     def fake_chat(*, system, user, agent_name, temperature, response_format, **_):
         if response_format == "text":

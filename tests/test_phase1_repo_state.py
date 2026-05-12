@@ -82,3 +82,45 @@ def test_projects_readme_no_genre_keyword():
     # "genre = X" YAML-ish patterns should be gone
     assert "genre = " not in t
     assert "source_preset" in t
+
+
+def test_genre_pipeline_module_gone():
+    assert not (REPO / "src" / "genre_pipeline").exists()
+    assert (REPO / "src" / "genre_extractor" / "__init__.py").exists()
+
+
+def test_no_stale_genre_pipeline_references():
+    """Everywhere except CHANGELOG.md and docs/history/ must use src.genre_extractor.
+
+    Exemptions (meta-references to the refactor itself, cleaned in phase 5):
+      - docs/superpowers/plans/  (this-task & future-phase plans quote old name)
+      - docs/superpowers/specs/genre-pipeline-design.md  (old design spec, archived in phase 5)
+      - tests/test_phase1_repo_state.py  (this file literally asserts on the string)
+    """
+    import subprocess
+    result = subprocess.run(
+        ["git", "grep", "-l", "genre_pipeline"],
+        capture_output=True, text=True, cwd=REPO,
+    )
+    EXEMPT_PREFIXES = (
+        "docs/history/",
+        "docs/superpowers/plans/",
+    )
+    EXEMPT_FILES = {
+        "CHANGELOG.md",
+        "docs/superpowers/specs/genre-pipeline-design.md",
+        "tests/test_phase1_repo_state.py",
+    }
+    offenders = [
+        line for line in result.stdout.splitlines()
+        if line
+        and line not in EXEMPT_FILES
+        and not any(line.startswith(p) for p in EXEMPT_PREFIXES)
+    ]
+    assert offenders == [], f"stale genre_pipeline references in: {offenders}"
+
+
+def test_genre_extractor_imports_ok():
+    import importlib
+    for mod in ("src.genre_extractor", "src.genre_extractor.pipeline"):
+        importlib.import_module(mod)

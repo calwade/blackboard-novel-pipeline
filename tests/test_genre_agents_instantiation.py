@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from src.core.blackboard import Blackboard
-from src.genre_pipeline.schemas import make_initial_build_status, make_empty_blueprint
+from src.genre_extractor.schemas import make_initial_build_status, make_empty_blueprint
 
 
 @pytest.fixture
@@ -26,14 +26,14 @@ def build_bb(tmp_path: Path) -> Blackboard:
 
 
 def test_extractor_instantiates():
-    from src.genre_pipeline.agents.extractor import GenreExtractor
+    from src.genre_extractor.agents.extractor import GenreExtractor
     a = GenreExtractor()
     assert a.name == "genre_extractor"
     assert a.response_format == "json"
 
 
 def test_extractor_build_prompts(build_bb):
-    from src.genre_pipeline.agents.extractor import GenreExtractor
+    from src.genre_extractor.agents.extractor import GenreExtractor
     a = GenreExtractor()
     system, user, inputs_read = a._build_prompts(
         build_bb, batch_id=1, batch_text="mock text"
@@ -44,13 +44,13 @@ def test_extractor_build_prompts(build_bb):
 
 
 def test_drafter_instantiates():
-    from src.genre_pipeline.agents.drafter import GenreDrafter
+    from src.genre_extractor.agents.drafter import GenreDrafter
     a = GenreDrafter()
     assert a.name.startswith("genre_drafter")
 
 
 def test_drafter_build_prompts_with_blueprint(build_bb):
-    from src.genre_pipeline.agents.drafter import GenreDrafter
+    from src.genre_extractor.agents.drafter import GenreDrafter
     build_bb.write_yaml("genre_blueprint.yaml", make_empty_blueprint(genre_id="demo"))
     a = GenreDrafter()
     system, user, inputs_read = a._build_prompts(build_bb)
@@ -59,13 +59,13 @@ def test_drafter_build_prompts_with_blueprint(build_bb):
 
 
 def test_validator_instantiates():
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
     a = GenreValidator()
     assert a.name == "genre_validator"
 
 
 def test_fixer_instantiates():
-    from src.genre_pipeline.agents.fixer import GenreFixer
+    from src.genre_extractor.agents.fixer import GenreFixer
     a = GenreFixer()
     assert a.name == "genre_fixer"
 
@@ -73,7 +73,7 @@ def test_fixer_instantiates():
 def test_all_agents_subclass_base_agent():
     """All four genre agents must inherit from the shared BaseAgent."""
     from src.core.base_agent import BaseAgent
-    from src.genre_pipeline.agents import (
+    from src.genre_extractor.agents import (
         GenreExtractor, GenreDrafter, GenreValidator, GenreFixer,
     )
     for cls in (GenreExtractor, GenreDrafter, GenreValidator, GenreFixer):

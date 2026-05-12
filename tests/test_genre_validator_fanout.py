@@ -19,7 +19,7 @@ import pytest
 
 
 def _seed_genre(tmp_path: Path, genre_id: str, *, era: str = "年代背景。\n"):
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre(genre_id, display_name="t", genre="x", era="y", tone="z")
     (tmp_path / genre_id / "era.md").write_text(era, encoding="utf-8")
 
@@ -44,7 +44,7 @@ def test_validator_runs_three_auditors_each_writes_issue(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
 
     bb = Blackboard(root=tmp_path / "g-fanout-1" / ".build")
     GenreValidator().run(bb, genre_id="g-fanout-1")
@@ -83,7 +83,7 @@ def test_validator_isolates_auditor_failure(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
 
     bb = Blackboard(root=tmp_path / "g-fanout-2" / ".build")
     # Public interface: run() must NOT raise when one auditor dies
@@ -120,7 +120,7 @@ def test_validator_keeps_tier1_deny_scan(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
 
     bb = Blackboard(root=tmp_path / "g-fanout-3" / ".build")
     GenreValidator().run(bb, genre_id="g-fanout-3")
@@ -144,7 +144,7 @@ def test_validator_public_run_signature_unchanged(tmp_path, monkeypatch):
     )
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.agents.validator import GenreValidator
+    from src.genre_extractor.agents.validator import GenreValidator
 
     bb = Blackboard(root=tmp_path / "g-fanout-4" / ".build")
     # This call shape is what _run_validate uses — must not raise.

@@ -1,7 +1,7 @@
 """GenreDrafter - two-step: blueprint synthesis + file rendering.
 
 Step A (this class): reads merged extraction notes, writes genre_blueprint.yaml.
-Step B is a deterministic renderer (src/genre_pipeline/pipeline.py) that
+Step B is a deterministic renderer (src/genre_extractor/pipeline.py) that
 reads blueprint and writes the 5 final files. Step B does NOT call LLM.
 
 Optional Chain-of-Density (CoD) 3-pass mode (librarian ★★★ #3):

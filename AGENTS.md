@@ -47,16 +47,16 @@ python -m src.bootstrap --project my-new-book
 
 ```bash
 # 从零手建（脚手架，不调 LLM）
-python -m src.genre_pipeline --new-genre <id> --name "..." --era "..."
+python -m src.genre_extractor --new-genre <id> --name "..." --era "..."
 
 # 补齐缺失文件（不调 LLM）
-python -m src.genre_pipeline --fill-genre <id>
+python -m src.genre_extractor --fill-genre <id>
 
 # 审查已有题材（Stage 1 结构校验 + Stage 2 LLM 语义）
-python -m src.genre_pipeline --audit-genre <id>
+python -m src.genre_extractor --audit-genre <id>
 
 # 从已有小说拆解题材规范（核心场景）
-python -m src.genre_pipeline --extract-from-novel <id> \
+python -m src.genre_extractor --extract-from-novel <id> \
     --sources novels/a.txt,novels/b.txt [--with-trial]
 ```
 

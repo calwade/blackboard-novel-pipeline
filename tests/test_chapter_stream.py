@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from src.genre_pipeline.chapter_stream import (
+from src.genre_extractor.chapter_stream import (
     ChapterRef,
     ChapterStream,
     STREAMING_THRESHOLD_BYTES,

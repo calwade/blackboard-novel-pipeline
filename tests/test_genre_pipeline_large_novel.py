@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from src.genre_pipeline.chapter_stream import STREAMING_THRESHOLD_BYTES
+from src.genre_extractor.chapter_stream import STREAMING_THRESHOLD_BYTES
 
 
 def _make_large_novel(path: Path, n_chapters: int = 500) -> int:
@@ -41,7 +41,7 @@ def test_extract_from_novel_streaming_integration(tmp_path, monkeypatch):
     file_size = _make_large_novel(novel, n_chapters=400)
     assert file_size > STREAMING_THRESHOLD_BYTES
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     tracemalloc.start()
     try:
@@ -83,7 +83,7 @@ def test_extract_small_file_uses_fast_path(tmp_path, monkeypatch):
     novel.write_text(text, encoding="utf-8")
     assert novel.stat().st_size < STREAMING_THRESHOLD_BYTES
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     out = pipeline.extract_from_novel(
         "demo-small",
         sources=[str(novel)],
@@ -104,7 +104,7 @@ def test_run_phase_extract_rebuilds_streams(tmp_path, monkeypatch):
     text = "\n".join([f"第{i}章 标题\n正文{i}" for i in range(1, 21)])
     novel.write_text(text, encoding="utf-8")
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     # First establish a build_status via dry_run
     pipeline.extract_from_novel(
         "demo-rephase", sources=[str(novel)], dry_run=True,
@@ -117,6 +117,6 @@ def test_run_phase_extract_rebuilds_streams(tmp_path, monkeypatch):
     status = bb.read_yaml("build_status.yaml")
     assert status["novel_sources"][0]["path"] == str(novel)
     # Confirm a stream can be rebuilt from that path.
-    from src.genre_pipeline.chapter_stream import ChapterStream
+    from src.genre_extractor.chapter_stream import ChapterStream
     stream = ChapterStream(status["novel_sources"][0]["path"])
     assert stream.total_chapters == 20

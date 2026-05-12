@@ -1,4 +1,4 @@
-"""End-to-end test: 3-tier merge behavior of src.genre_pipeline.pipeline._run_merge.
+"""End-to-end test: 3-tier merge behavior of src.genre_extractor.pipeline._run_merge.
 
 Three regimes:
   ≤ ARC_BATCH_COUNT (4) batches   → pure concat, 0 LLM calls
@@ -47,7 +47,7 @@ def _seed_batch(bb: Blackboard, batch_id: int) -> None:
 
 def _seed_status(bb: Blackboard) -> None:
     """Minimal build_status for _run_merge to update phase info."""
-    from src.genre_pipeline.schemas import make_initial_build_status
+    from src.genre_extractor.schemas import make_initial_build_status
     bb.write_yaml(
         "build_status.yaml",
         make_initial_build_status(
@@ -92,7 +92,7 @@ def _stub_book_distiller_output(arc_ids: list[int]) -> str:
 
 def test_merge_with_2_batches_uses_pure_concat_no_llm(bb, monkeypatch):
     """Short novel: 2 batches → fall back to simple concat, no LLM calls."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     _seed_status(bb)
     _seed_batch(bb, 1)
@@ -120,7 +120,7 @@ def test_merge_with_2_batches_uses_pure_concat_no_llm(bb, monkeypatch):
 
 def test_merge_with_4_batches_still_uses_pure_concat(bb, monkeypatch):
     """Boundary: exactly ARC_BATCH_COUNT batches → pure concat (single arc would equal merged)."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     _seed_status(bb)
     for i in range(1, 5):
@@ -147,7 +147,7 @@ def test_merge_with_4_batches_still_uses_pure_concat(bb, monkeypatch):
 
 def test_merge_with_8_batches_runs_arc_tier_only(bb, monkeypatch):
     """Mid novel: 8 batches → 2 arc_merger calls, 0 book_distiller calls."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     _seed_status(bb)
     for i in range(1, 9):
@@ -190,7 +190,7 @@ def test_merge_with_8_batches_runs_arc_tier_only(bb, monkeypatch):
 
 def test_merge_with_5_batches_produces_2_arcs(bb, monkeypatch):
     """Odd number: 5 batches → arc 1 covers batches 1-4, arc 2 covers batch 5."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     _seed_status(bb)
     for i in range(1, 6):
@@ -221,7 +221,7 @@ def test_merge_with_5_batches_produces_2_arcs(bb, monkeypatch):
 
 def test_merge_with_16_batches_runs_book_distill(bb, monkeypatch):
     """Long novel: 16 batches → 4 arc_merger calls + 1 book_distiller call."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     _seed_status(bb)
     for i in range(1, 17):
@@ -268,7 +268,7 @@ def test_merge_with_16_batches_runs_book_distill(bb, monkeypatch):
 
 def test_merge_updates_phase_status_to_done(bb, monkeypatch):
     """_run_merge must still mark the merge phase done regardless of tier."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     _seed_status(bb)
     _seed_batch(bb, 1)

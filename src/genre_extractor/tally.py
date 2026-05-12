@@ -28,7 +28,7 @@ from datetime import datetime
 from typing import Any
 
 from src.core.blackboard import Blackboard
-from src.genre_pipeline import schemas
+from src.genre_extractor import schemas
 
 
 _TOP_N = 10

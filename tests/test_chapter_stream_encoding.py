@@ -43,7 +43,7 @@ def big5_novel(tmp_path: Path) -> Path:
 
 
 def test_chapter_stream_reads_gbk_small_file(gbk_novel):
-    from src.genre_pipeline.chapter_stream import ChapterStream
+    from src.genre_extractor.chapter_stream import ChapterStream
 
     stream = ChapterStream(gbk_novel)
     assert stream.detected_encoding != "utf-8"  # 应该识别出是 GBK 家族
@@ -56,7 +56,7 @@ def test_chapter_stream_reads_gbk_small_file(gbk_novel):
 
 
 def test_chapter_stream_reads_big5(big5_novel):
-    from src.genre_pipeline.chapter_stream import ChapterStream
+    from src.genre_extractor.chapter_stream import ChapterStream
 
     stream = ChapterStream(big5_novel)
     # charset_normalizer 可能识别为 big5 / big5hkscs / cp950 等；只要不是 utf-8 就行
@@ -71,7 +71,7 @@ def test_chapter_stream_reads_big5(big5_novel):
 
 def test_chapter_stream_utf8_no_conversion(tmp_path: Path):
     """UTF-8 文件不应触发 tempfile 创建。"""
-    from src.genre_pipeline.chapter_stream import ChapterStream
+    from src.genre_extractor.chapter_stream import ChapterStream
 
     p = tmp_path / "utf8-novel.txt"
     p.write_text("第1章\n内容\n第2章\n更多\n", encoding="utf-8")
@@ -83,7 +83,7 @@ def test_chapter_stream_utf8_no_conversion(tmp_path: Path):
 
 def test_chapter_stream_utf8_bom(tmp_path: Path):
     """UTF-8 with BOM 也应走快路径。"""
-    from src.genre_pipeline.chapter_stream import ChapterStream
+    from src.genre_extractor.chapter_stream import ChapterStream
 
     p = tmp_path / "utf8-bom.txt"
     p.write_bytes(b"\xef\xbb\xbf" + "第1章\n内容\n".encode("utf-8"))
@@ -94,7 +94,7 @@ def test_chapter_stream_utf8_bom(tmp_path: Path):
 
 def test_chapter_stream_large_gbk_file(tmp_path: Path):
     """非 UTF-8 的大文件也能工作（会写 UTF-8 临时文件）。"""
-    from src.genre_pipeline.chapter_stream import ChapterStream
+    from src.genre_extractor.chapter_stream import ChapterStream
 
     # 构造 > 5MB 的 GBK 文件，触发流式路径
     chapters = []
@@ -119,7 +119,7 @@ def test_chapter_stream_large_gbk_file(tmp_path: Path):
 
 def test_chapter_stream_cleans_up_tempfile(tmp_path: Path, gbk_novel: Path):
     """__del__ 应清理 UTF-8 临时文件（best-effort）。"""
-    from src.genre_pipeline.chapter_stream import ChapterStream
+    from src.genre_extractor.chapter_stream import ChapterStream
 
     stream = ChapterStream(gbk_novel)
     tmp_path_saved = stream._owned_tempfile

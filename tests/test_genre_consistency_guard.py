@@ -14,7 +14,7 @@ import pytest
 
 
 def _seed_genre(tmp_path: Path, genre_id: str, *, with_resources: bool = False) -> Path:
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre(genre_id, display_name="t", genre="x", era="y", tone="z")
     if with_resources:
         (tmp_path / genre_id / "resource_schema.yaml").write_text(
@@ -25,7 +25,7 @@ def _seed_genre(tmp_path: Path, genre_id: str, *, with_resources: bool = False) 
 
 
 def test_consistency_guard_instantiates():
-    from src.genre_pipeline.auditors.genre_consistency_guard import (
+    from src.genre_extractor.auditors.genre_consistency_guard import (
         GenreConsistencyGuard,
     )
     a = GenreConsistencyGuard()
@@ -40,7 +40,7 @@ def test_consistency_guard_build_prompts_reads_iron_laws_and_era(tmp_path, monke
     _seed_genre(tmp_path, "g-cg-1")
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_consistency_guard import (
+    from src.genre_extractor.auditors.genre_consistency_guard import (
         GenreConsistencyGuard,
     )
 
@@ -61,7 +61,7 @@ def test_consistency_guard_reads_resource_schema_when_present(tmp_path, monkeypa
     _seed_genre(tmp_path, "g-cg-rs", with_resources=True)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_consistency_guard import (
+    from src.genre_extractor.auditors.genre_consistency_guard import (
         GenreConsistencyGuard,
     )
 
@@ -80,7 +80,7 @@ def test_consistency_guard_handle_output_tags_source(tmp_path, monkeypatch):
     _seed_genre(tmp_path, "g-cg-2")
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_consistency_guard import (
+    from src.genre_extractor.auditors.genre_consistency_guard import (
         GenreConsistencyGuard,
     )
 
@@ -116,7 +116,7 @@ def test_consistency_guard_full_run_with_stub_llm(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_consistency_guard import (
+    from src.genre_extractor.auditors.genre_consistency_guard import (
         GenreConsistencyGuard,
     )
 

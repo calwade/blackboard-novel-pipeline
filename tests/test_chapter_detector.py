@@ -1,4 +1,4 @@
-"""Tests for src.genre_pipeline.chapter_detector.
+"""Tests for src.genre_extractor.chapter_detector.
 
 Covers multi-format chapter detection used by the genre extraction pipeline
 when it tears a novel into batches.
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.genre_pipeline import chapter_detector as cd
+from src.genre_extractor import chapter_detector as cd
 
 
 # ---------------------------------------------------------------------------

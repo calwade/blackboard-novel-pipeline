@@ -6,7 +6,7 @@
 
 **Spec:** [`docs/superpowers/specs/book-centric-workflow-design.md`](../specs/book-centric-workflow-design.md)
 
-**Architecture:** `genres/` → `presets/`（窄化为新书起点模板，运行时不参与）；题材 4 份文件物理下沉到 `projects/<id>/` 根目录；`src/genre_pipeline/` → `src/genre_extractor/` 按产物落点拆两个入口；Web 新建作品向导 4 步三选一 + 独立 `/presets` 管理子站。
+**Architecture:** `genres/` → `presets/`（窄化为新书起点模板，运行时不参与）；题材 4 份文件物理下沉到 `projects/<id>/` 根目录；`src/genre_extractor/` → `src/genre_extractor/` 按产物落点拆两个入口；Web 新建作品向导 4 步三选一 + 独立 `/presets` 管理子站。
 
 **Tech Stack:** Python 3.9+（无新依赖）、Flask（Web 层）、pytest（TDD）。
 
@@ -18,7 +18,7 @@
 
 | Phase | 文件 | 主题 | 预估任务数 |
 |---|---|---|---|
-| 1 | [`2026-05-12-phase1-migration-and-rename.md`](2026-05-12-phase1-migration-and-rename.md) | 数据迁移（genres→presets + 作品自带题材） + `src/genre_pipeline/` 改名 `src/genre_extractor/` | ~7 |
+| 1 | [`2026-05-12-phase1-migration-and-rename.md`](2026-05-12-phase1-migration-and-rename.md) | 数据迁移（genres→presets + 作品自带题材） + `src/genre_extractor/` 改名 `src/genre_extractor/` | ~7 |
 | 2 | [`2026-05-12-phase2-core-extraction.md`](2026-05-12-phase2-core-extraction.md) | `core.py` 抽共享逻辑 + `to_project.py` / `to_preset.py` 新入口 + `bootstrap.py` 简化为单层 | ~9 |
 | 3 | [`2026-05-12-phase3-wizard-agents.md`](2026-05-12-phase3-wizard-agents.md) | OutlineDrafter + CharactersDrafter + `create_project()` 4 步向导签名落地 | ~6 |
 | 4 | [`2026-05-12-phase4-web-routes.md`](2026-05-12-phase4-web-routes.md) | Web API 路由重排 + 模板改名/重构 + 向导 UI + 作品覆盖题材入口 | ~8 |
@@ -59,7 +59,7 @@ Phase 5 (文档 + 清理 + 验收)                   ← 依赖全部
 - 每个任务末尾 commit 一次，message 格式：`<type>(<phase>): <简述>`
 - `<type>` ∈ `feat|refactor|test|chore|docs|fix`
 - `<phase>` 从 `phase1` 到 `phase5`
-- 示例：`refactor(phase1): rename src/genre_pipeline to src/genre_extractor`
+- 示例：`refactor(phase1): rename src/genre_extractor to src/genre_extractor`
 
 ### 命名约定（全 phase 一致）
 
@@ -79,7 +79,7 @@ Phase 5 (文档 + 清理 + 验收)                   ← 依赖全部
 
 ### 不做的事
 
-- 不保留 `src/genre_pipeline` shim
+- 不保留 `src/genre_extractor` shim
 - 不保留 `genres/` 软链
 - 不保留旧 Web 路由 shim（`/genres*` 全删，不做 302 重定向）
 - 不做 CI（已在之前的提交里删了 `.github/workflows/`）

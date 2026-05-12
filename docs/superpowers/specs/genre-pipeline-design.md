@@ -416,28 +416,28 @@ genres/<id>/
 
 ```bash
 # 入口 A：从零手建（最小实现，本 spec 第一版可以不做交互问卷，只生成 stub）
-python3 -m src.genre_pipeline --new-genre <genre-id> \
+python3 -m src.genre_extractor --new-genre <genre-id> \
     --name "港综-台湾-1990" \
     --era "1990-2000 台北高雄"
 
 # 入口 B：补齐
-python3 -m src.genre_pipeline --fill-genre <genre-id>
+python3 -m src.genre_extractor --fill-genre <genre-id>
 # 读现有 genres/<id>/，识别缺失文件，调 Drafter 补齐
 
 # 入口 C：拆解（核心）
-python3 -m src.genre_pipeline --extract-from-novel <genre-id> \
+python3 -m src.genre_extractor --extract-from-novel <genre-id> \
     --sources novels/a.txt,novels/b.txt \
     [--with-trial]
 # 流程：Extract (滑窗) → Merge → Draft → Validate (+Trial 可选)
 
 # 入口 D：纯审查（不产出新文件）
-python3 -m src.genre_pipeline --audit-genre <genre-id>
+python3 -m src.genre_extractor --audit-genre <genre-id>
 
 # Intent Router（中断续跑，对应小说流水线的 --plan-only 等）
-python3 -m src.genre_pipeline --extract-only <genre-id> --batch 7
-python3 -m src.genre_pipeline --merge-only <genre-id>
-python3 -m src.genre_pipeline --draft-only <genre-id>
-python3 -m src.genre_pipeline --validate-only <genre-id> [--with-trial]
+python3 -m src.genre_extractor --extract-only <genre-id> --batch 7
+python3 -m src.genre_extractor --merge-only <genre-id>
+python3 -m src.genre_extractor --draft-only <genre-id>
+python3 -m src.genre_extractor --validate-only <genre-id> [--with-trial]
 ```
 
 ---
@@ -449,7 +449,7 @@ python3 -m src.genre_pipeline --validate-only <genre-id> [--with-trial]
 ### 10.1 第一版（已交付）
 
 - ✅ `src/core/` 下沉（`Blackboard` + `BaseAgent`，shim 保留向后兼容）
-- ✅ `src/genre_pipeline/` 完整骨架 + 4 个 Agent
+- ✅ `src/genre_extractor/` 完整骨架 + 4 个 Agent
 - ✅ CLI 全部 subcommand 接入 + Intent Router（`--extract-only` / `--merge-only` / `--draft-only` / `--validate-only`）
 - ✅ `--new-genre` stub 脚手架
 - ✅ `--extract-from-novel` 全流程打通
@@ -491,7 +491,7 @@ python3 -m src.genre_pipeline --validate-only <genre-id> [--with-trial]
 | 400 章小说跑 Extract 超时 | 中 | 中 | 每批独立落盘 + CANCEL_EVENT + Intent Router 续跑，失败可断点 |
 | 题材层的 `prompts_log.jsonl` 与作品层撞库 | 低 | 低 | 题材层写 `genres/<id>/.build/prompts_log.jsonl`，独立目录 |
 
-**回退方案：**第一版完全不改 `src/pipeline.py` / `src/bootstrap.py` / 现有 Agent 实现。如果 `src/core/` 下沉出问题，回退步骤：删除 `src/genre_pipeline/` + `src/core/`，**并把 `src/blackboard.py` 和 `src/agents/_base.py` 的 re-export shim 恢复为下沉前的完整实现**（git 历史可查）即可。由于 shim 方案的 API 面和原实现完全一致，大概率无需回退。
+**回退方案：**第一版完全不改 `src/pipeline.py` / `src/bootstrap.py` / 现有 Agent 实现。如果 `src/core/` 下沉出问题，回退步骤：删除 `src/genre_extractor/` + `src/core/`，**并把 `src/blackboard.py` 和 `src/agents/_base.py` 的 re-export shim 恢复为下沉前的完整实现**（git 历史可查）即可。由于 shim 方案的 API 面和原实现完全一致，大概率无需回退。
 
 ---
 
@@ -501,8 +501,8 @@ python3 -m src.genre_pipeline --validate-only <genre-id> [--with-trial]
 
 1. `python3 -m pytest tests/` 全绿（包括所有新增测试）
 2. 现有 `python3 -m src.bootstrap --project gangster-hk-1983-linjiayao` 仍然正常
-3. `python3 -m src.genre_pipeline --new-genre demo-genre --name "demo"` 能生成 4 份 stub 文件
-4. `python3 -m src.genre_pipeline --extract-from-novel demo-genre --sources <mock-novel>` 能走完 extract → merge → draft → validate，最后在 `genres/demo-genre/.build/build_status.yaml` 里看到全部 phase = done
+3. `python3 -m src.genre_extractor --new-genre demo-genre --name "demo"` 能生成 4 份 stub 文件
+4. `python3 -m src.genre_extractor --extract-from-novel demo-genre --sources <mock-novel>` 能走完 extract → merge → draft → validate，最后在 `genres/demo-genre/.build/build_status.yaml` 里看到全部 phase = done
 5. `python3 -m src.tools.setting_lint --genre demo-genre` 对 extract 产物结果不报 ERROR（WARNING 可接受）
 6. `AGENTS.md` 增加了题材流水线索引段
 

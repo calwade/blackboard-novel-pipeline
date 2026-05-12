@@ -44,7 +44,7 @@ def _write_stub_batch(bb: Blackboard, batch_id: int, iron_law_summary: str = "de
 
 
 def test_arc_merger_instantiates():
-    from src.genre_pipeline.agents.arc_merger import GenreArcMerger
+    from src.genre_extractor.agents.arc_merger import GenreArcMerger
     a = GenreArcMerger()
     assert a.name == "genre_arc_merger"
     assert a.response_format == "json"
@@ -52,7 +52,7 @@ def test_arc_merger_instantiates():
 
 
 def test_arc_merger_build_prompts_reads_batches(bb):
-    from src.genre_pipeline.agents.arc_merger import GenreArcMerger
+    from src.genre_extractor.agents.arc_merger import GenreArcMerger
 
     _write_stub_batch(bb, 1)
     _write_stub_batch(bb, 2)
@@ -73,7 +73,7 @@ def test_arc_merger_build_prompts_reads_batches(bb):
 
 
 def test_arc_merger_handle_output_writes_arc_yaml(bb):
-    from src.genre_pipeline.agents.arc_merger import GenreArcMerger
+    from src.genre_extractor.agents.arc_merger import GenreArcMerger
 
     a = GenreArcMerger()
     stub_json = (
@@ -93,7 +93,7 @@ def test_arc_merger_handle_output_writes_arc_yaml(bb):
 
 
 def test_arc_merger_full_run_with_stub_llm(bb, monkeypatch):
-    from src.genre_pipeline.agents.arc_merger import GenreArcMerger
+    from src.genre_extractor.agents.arc_merger import GenreArcMerger
 
     _write_stub_batch(bb, 1)
     _write_stub_batch(bb, 2)
@@ -137,7 +137,7 @@ def test_arc_merger_full_run_with_stub_llm(bb, monkeypatch):
 
 def test_arc_merger_includes_previous_arc_if_exists(bb, monkeypatch):
     """When running a later arc, if earlier arc file exists, should be available as reference."""
-    from src.genre_pipeline.agents.arc_merger import GenreArcMerger
+    from src.genre_extractor.agents.arc_merger import GenreArcMerger
 
     # Earlier arc already produced
     bb.write_yaml("extraction_notes/arcs/arc-001.yaml", {

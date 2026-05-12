@@ -16,14 +16,14 @@ import pytest
 
 def _seed_genre(tmp_path: Path, genre_id: str, *, era: str = "年代说明。\n") -> Path:
     """Create a minimal genre dir under tmp_path with the 4 required files."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     pipeline.new_genre(genre_id, display_name="t", genre="x", era="y", tone="z")
     (tmp_path / genre_id / "era.md").write_text(era, encoding="utf-8")
     return tmp_path / genre_id
 
 
 def test_fact_checker_instantiates():
-    from src.genre_pipeline.auditors.genre_fact_checker import GenreFactChecker
+    from src.genre_extractor.auditors.genre_fact_checker import GenreFactChecker
     a = GenreFactChecker()
     assert a.name == "genre_fact_checker"
     assert a.temperature == 0.0
@@ -37,7 +37,7 @@ def test_fact_checker_build_prompts_reads_era(tmp_path, monkeypatch):
     _seed_genre(tmp_path, "g-fc-1", era="一九八三年的油麻地。\n")
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_fact_checker import GenreFactChecker
+    from src.genre_extractor.auditors.genre_fact_checker import GenreFactChecker
 
     bb = Blackboard(root=tmp_path / "g-fc-1" / ".build")
     system, user, inputs_read = GenreFactChecker()._build_prompts(
@@ -55,7 +55,7 @@ def test_fact_checker_handle_output_writes_issues_with_source(tmp_path, monkeypa
     _seed_genre(tmp_path, "g-fc-2")
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_fact_checker import GenreFactChecker
+    from src.genre_extractor.auditors.genre_fact_checker import GenreFactChecker
 
     bb = Blackboard(root=tmp_path / "g-fc-2" / ".build")
     raw = (
@@ -92,7 +92,7 @@ def test_fact_checker_full_run_with_stub_llm(tmp_path, monkeypatch):
     monkeypatch.setattr("src.agents._base.llm.chat", fake_chat)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.auditors.genre_fact_checker import GenreFactChecker
+    from src.genre_extractor.auditors.genre_fact_checker import GenreFactChecker
 
     bb = Blackboard(root=tmp_path / "g-fc-3" / ".build")
     GenreFactChecker().run(bb, genre_id="g-fc-3")

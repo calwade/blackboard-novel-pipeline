@@ -8,7 +8,7 @@ import pytest
 
 def test_update_phase_status(tmp_path: Path):
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.schemas import make_initial_build_status, update_phase_status
+    from src.genre_extractor.schemas import make_initial_build_status, update_phase_status
 
     bb = Blackboard(root=tmp_path)
     status = make_initial_build_status(
@@ -25,7 +25,7 @@ def test_update_phase_status(tmp_path: Path):
 
 def test_record_batch_done(tmp_path: Path):
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.schemas import make_initial_build_status, record_batch_done
+    from src.genre_extractor.schemas import make_initial_build_status, record_batch_done
 
     bb = Blackboard(root=tmp_path)
     status = make_initial_build_status(
@@ -44,7 +44,7 @@ def test_record_batch_done(tmp_path: Path):
 
 def test_next_batch_to_run(tmp_path: Path):
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.schemas import make_initial_build_status, record_batch_done, next_batch_to_run
+    from src.genre_extractor.schemas import make_initial_build_status, record_batch_done, next_batch_to_run
 
     bb = Blackboard(root=tmp_path)
     status = make_initial_build_status(
@@ -66,7 +66,7 @@ def test_next_batch_to_run(tmp_path: Path):
 
 def test_set_in_flight(tmp_path: Path):
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.schemas import make_initial_build_status, set_in_flight, clear_in_flight
+    from src.genre_extractor.schemas import make_initial_build_status, set_in_flight, clear_in_flight
 
     bb = Blackboard(root=tmp_path)
     status = make_initial_build_status(
@@ -88,7 +88,7 @@ def test_set_in_flight(tmp_path: Path):
 
 def test_update_phase_status_unknown_raises(tmp_path: Path):
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline.schemas import make_initial_build_status, update_phase_status
+    from src.genre_extractor.schemas import make_initial_build_status, update_phase_status
 
     bb = Blackboard(root=tmp_path)
     bb.write_yaml("build_status.yaml", make_initial_build_status(

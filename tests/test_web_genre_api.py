@@ -1,6 +1,6 @@
 """Web API: genre pipeline endpoints.
 
-Covers the 5 new routes exposed by web/app.py on top of src.genre_pipeline:
+Covers the 5 new routes exposed by web/app.py on top of src.genre_extractor:
   - GET    /api/genres            (enhanced; includes build_status + file counts)
   - POST   /api/genres/new
   - POST   /api/genres/<id>/fill
@@ -21,7 +21,7 @@ import yaml
 
 from web.app import app
 from src import config, bootstrap
-from src.genre_pipeline import pipeline as genre_pipeline
+from src.genre_extractor import pipeline as genre_extractor
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def client():
 def tmp_genres(tmp_path, monkeypatch):
     """Redirect config.GENRES_DIR to tmp_path so create/delete don't touch real genres/."""
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
-    # bootstrap + genre_pipeline both read config.GENRES_DIR via attribute lookup
+    # bootstrap + genre_extractor both read config.GENRES_DIR via attribute lookup
     # on the same module, so the patch above is enough.
     yield tmp_path
 
@@ -152,7 +152,7 @@ def test_audit_genre_returns_counts(client, tmp_genres, monkeypatch):
     client.post("/api/genres/new", json={"id": "audit-smoke"})
 
     # Stub the expensive Validator .run so no LLM call happens
-    from src.genre_pipeline.agents import validator as v_mod
+    from src.genre_extractor.agents import validator as v_mod
     monkeypatch.setattr(v_mod.GenreValidator, "run", lambda self, bb, **kw: None)
 
     resp = client.post("/api/genres/audit-smoke/audit")
@@ -365,8 +365,8 @@ def test_genre_extract_progress_page(client):
 # Cancellation plumbing
 # ---------------------------------------------------------------------------
 
-def test_cancel_event_exists_on_genre_pipeline():
+def test_cancel_event_exists_on_genre_extractor():
     """The Web abort button sets this; must be on the module."""
-    assert hasattr(genre_pipeline, "CANCEL_EVENT")
+    assert hasattr(genre_extractor, "CANCEL_EVENT")
     # also there's a dedicated exception type
-    assert hasattr(genre_pipeline, "GenrePipelineAborted")
+    assert hasattr(genre_extractor, "GenrePipelineAborted")

@@ -206,7 +206,7 @@ Header 四个按钮：
 
 ### Q：拆解 400 章小说要多久？
 
-一次完整跑 15–60 分钟，取决于章节数 × 批次数（25 章 / 批）× 每批 LLM 延迟。期间随时 `⏹ 中断`，下次用 CLI `python -m src.genre_pipeline --extract-from-novel <id> --extract-only`（或 `--merge-only` / `--draft-only` / `--validate-only`）断点续跑。
+一次完整跑 15–60 分钟，取决于章节数 × 批次数（25 章 / 批）× 每批 LLM 延迟。期间随时 `⏹ 中断`，下次用 CLI `python -m src.genre_extractor --extract-from-novel <id> --extract-only`（或 `--merge-only` / `--draft-only` / `--validate-only`）断点续跑。
 
 ### Q：跑了一半想换模型？
 

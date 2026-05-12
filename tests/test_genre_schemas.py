@@ -5,7 +5,7 @@ import pytest
 
 
 def test_extraction_note_minimal_valid():
-    from src.genre_pipeline.schemas import validate_extraction_note
+    from src.genre_extractor.schemas import validate_extraction_note
     obj = {
         "batch_id": 1,
         "chapters_covered": [1, 25],
@@ -23,14 +23,14 @@ def test_extraction_note_minimal_valid():
 
 
 def test_extraction_note_missing_required_key_raises():
-    from src.genre_pipeline.schemas import validate_extraction_note
+    from src.genre_extractor.schemas import validate_extraction_note
     obj = {"batch_id": 1}  # missing almost everything
     with pytest.raises(ValueError, match="chapters_covered"):
         validate_extraction_note(obj)
 
 
 def test_extraction_note_confidence_enum():
-    from src.genre_pipeline.schemas import validate_extraction_note
+    from src.genre_extractor.schemas import validate_extraction_note
     obj = {
         "batch_id": 1,
         "chapters_covered": [1, 25],
@@ -50,7 +50,7 @@ def test_extraction_note_confidence_enum():
 
 def test_extraction_note_fuzzy_term_warning():
     """笔记里出现'暴涨/海量/大致/似乎'等禁词要 warn。"""
-    from src.genre_pipeline.schemas import validate_extraction_note
+    from src.genre_extractor.schemas import validate_extraction_note
     obj = {
         "batch_id": 1,
         "chapters_covered": [1, 25],
@@ -69,7 +69,7 @@ def test_extraction_note_fuzzy_term_warning():
 
 
 def test_build_status_initial():
-    from src.genre_pipeline.schemas import make_initial_build_status
+    from src.genre_extractor.schemas import make_initial_build_status
     status = make_initial_build_status(
         genre_id="demo",
         entry="extract-from-novel",
@@ -82,7 +82,7 @@ def test_build_status_initial():
 
 
 def test_build_status_multiple_novels():
-    from src.genre_pipeline.schemas import make_initial_build_status
+    from src.genre_extractor.schemas import make_initial_build_status
     status = make_initial_build_status(
         genre_id="demo",
         entry="extract-from-novel",
@@ -96,7 +96,7 @@ def test_build_status_multiple_novels():
 
 
 def test_blueprint_skeleton():
-    from src.genre_pipeline.schemas import make_empty_blueprint
+    from src.genre_extractor.schemas import make_empty_blueprint
     bp = make_empty_blueprint(genre_id="demo")
     assert bp["genre_id"] == "demo"
     assert "era_observations" in bp

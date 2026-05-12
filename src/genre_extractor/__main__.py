@@ -1,15 +1,15 @@
 """CLI entry for the genre pipeline.
 
 Usage:
-  python3 -m src.genre_pipeline --new-genre <id> [--name X --genre Y --era Z --tone W]
-  python3 -m src.genre_pipeline --fill-genre <id>
-  python3 -m src.genre_pipeline --audit-genre <id>
-  python3 -m src.genre_pipeline --extract-from-novel <id> --sources a.txt,b.txt [--with-trial]
-  python3 -m src.genre_pipeline --extract-from-novel <id> --sources a.txt --dry-run
-  python3 -m src.genre_pipeline --extract-only <id>
-  python3 -m src.genre_pipeline --merge-only <id>
-  python3 -m src.genre_pipeline --draft-only <id>
-  python3 -m src.genre_pipeline --validate-only <id> [--with-trial]
+  python3 -m src.genre_extractor --new-genre <id> [--name X --genre Y --era Z --tone W]
+  python3 -m src.genre_extractor --fill-genre <id>
+  python3 -m src.genre_extractor --audit-genre <id>
+  python3 -m src.genre_extractor --extract-from-novel <id> --sources a.txt,b.txt [--with-trial]
+  python3 -m src.genre_extractor --extract-from-novel <id> --sources a.txt --dry-run
+  python3 -m src.genre_extractor --extract-only <id>
+  python3 -m src.genre_extractor --merge-only <id>
+  python3 -m src.genre_extractor --draft-only <id>
+  python3 -m src.genre_extractor --validate-only <id> [--with-trial]
 """
 from __future__ import annotations
 
@@ -42,11 +42,11 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     if args.new_genre:
         if args.interactive:
-            from src.genre_pipeline import interview
+            from src.genre_extractor import interview
             # Interactive overrides CLI flags — run the questionnaire.
             # id is forced from CLI for safety (user typed it already).
             answers_override = {"id": args.new_genre}

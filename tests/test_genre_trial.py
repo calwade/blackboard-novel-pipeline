@@ -100,7 +100,7 @@ def _patch_llm_always_ok(monkeypatch):
 
 def test_trial_dry_run_creates_scratch_and_cleans_up(tmp_path, monkeypatch):
     """dry_run=True must not call the LLM yet still run bootstrap + cleanup."""
-    from src.genre_pipeline import trial
+    from src.genre_extractor import trial
 
     _, bb = _stage_isolated_genre_and_build(tmp_path, monkeypatch)
 
@@ -143,7 +143,7 @@ def test_trial_dry_run_creates_scratch_and_cleans_up(tmp_path, monkeypatch):
 
 def test_trial_with_stub_llm_runs_three_chapters(tmp_path, monkeypatch):
     """With stubbed LLM + evaluator passing, 3 chapters finish and info is logged."""
-    from src.genre_pipeline import trial
+    from src.genre_extractor import trial
 
     _, bb = _stage_isolated_genre_and_build(tmp_path, monkeypatch)
     _patch_llm_always_ok(monkeypatch)
@@ -160,7 +160,7 @@ def test_trial_with_stub_llm_runs_three_chapters(tmp_path, monkeypatch):
 
 def test_trial_records_warning_when_chapter_fails(tmp_path, monkeypatch):
     """If evaluator returns overall_pass=False, a warning is recorded."""
-    from src.genre_pipeline import trial
+    from src.genre_extractor import trial
 
     _, bb = _stage_isolated_genre_and_build(tmp_path, monkeypatch)
 
@@ -203,7 +203,7 @@ def test_trial_records_warning_when_chapter_fails(tmp_path, monkeypatch):
 
 def test_trial_handles_genre_not_found(tmp_path, monkeypatch):
     """Unknown genre_id must raise, not silently write garbage."""
-    from src.genre_pipeline import trial
+    from src.genre_extractor import trial
 
     tmp_genres = tmp_path / "genres"
     tmp_projects = tmp_path / "projects"
@@ -221,7 +221,7 @@ def test_trial_handles_genre_not_found(tmp_path, monkeypatch):
 
 def test_trial_preserves_prior_active_project(tmp_path, monkeypatch):
     """If another project was active before trial, it must be restored after."""
-    from src.genre_pipeline import trial
+    from src.genre_extractor import trial
     from src import bootstrap
 
     _, bb = _stage_isolated_genre_and_build(tmp_path, monkeypatch)

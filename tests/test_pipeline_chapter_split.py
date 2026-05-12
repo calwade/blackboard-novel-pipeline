@@ -10,7 +10,7 @@ from __future__ import annotations
 def test_pipeline_split_real_chapters_by_batch():
     """30-chapter text, batch_size=10 → 3 batches, each holding exactly
     the right chapters."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     chapters = []
     for i in range(1, 31):
@@ -41,7 +41,7 @@ def test_pipeline_split_real_chapters_by_batch():
 def test_pipeline_split_falls_back_when_no_markers():
     """If detector finds nothing, splitter still returns the whole text
     as a single batch (no crash, no data loss)."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     text = "一整段没有章节标记的散文。" * 200
     total_ch = pipeline._count_chapters_in_text(text)
@@ -53,7 +53,7 @@ def test_pipeline_split_falls_back_when_no_markers():
 
 def test_pipeline_split_english_chapters():
     """English 'Chapter N' format should also split correctly."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     chapters = []
     for i in range(1, 13):
@@ -73,7 +73,7 @@ def test_pipeline_split_english_chapters():
 
 def test_pipeline_split_reproduces_text_exactly():
     """Joining all batches must reproduce the original text byte-for-byte."""
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
 
     text = "\n\n".join([
         f"第{i}章 t{i}\n" + ("正文段落内容。" * 15)

@@ -1,4 +1,4 @@
-"""Tests for src.genre_pipeline.tally — extraction_tally.md generation.
+"""Tests for src.genre_extractor.tally — extraction_tally.md generation.
 
 The tally is a human-readable "health dashboard" produced at the end of
 the merge phase. It's pure data aggregation (no LLM) from:
@@ -22,7 +22,7 @@ def _make_bb(tmp_path: Path):
 
 
 def _write_initial_status(bb, *, genre_id="demo", sources=None):
-    from src.genre_pipeline.schemas import make_initial_build_status
+    from src.genre_extractor.schemas import make_initial_build_status
     bb.write_yaml(
         "build_status.yaml",
         make_initial_build_status(
@@ -63,7 +63,7 @@ def _sample_batch(
 
 def test_tally_on_empty_build(tmp_path: Path):
     """build_status exists but 0 batches -> Markdown still valid."""
-    from src.genre_pipeline.tally import generate_extraction_tally
+    from src.genre_extractor.tally import generate_extraction_tally
 
     bb = _make_bb(tmp_path)
     _write_initial_status(bb, genre_id="empty-demo", sources=[])
@@ -81,7 +81,7 @@ def test_tally_on_empty_build(tmp_path: Path):
 
 def test_tally_with_3_batches(tmp_path: Path):
     """3 hand-rolled batches -> coverage, Top-N, confidence buckets."""
-    from src.genre_pipeline.tally import generate_extraction_tally
+    from src.genre_extractor.tally import generate_extraction_tally
 
     bb = _make_bb(tmp_path)
     _write_initial_status(
@@ -194,7 +194,7 @@ def test_tally_with_3_batches(tmp_path: Path):
 
 def test_tally_flags_fuzzy_terms(tmp_path: Path):
     """A forbidden fuzzy word in a batch -> tally warning indicator."""
-    from src.genre_pipeline.tally import generate_extraction_tally
+    from src.genre_extractor.tally import generate_extraction_tally
 
     bb = _make_bb(tmp_path)
     _write_initial_status(
@@ -228,7 +228,7 @@ def test_tally_flags_fuzzy_terms(tmp_path: Path):
 
 def test_tally_omits_empty_resource_section(tmp_path: Path):
     """If all resource_candidates empty, skip the whole section."""
-    from src.genre_pipeline.tally import generate_extraction_tally
+    from src.genre_extractor.tally import generate_extraction_tally
 
     bb = _make_bb(tmp_path)
     _write_initial_status(
@@ -262,7 +262,7 @@ def test_run_merge_generates_tally(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
     from src.core.blackboard import Blackboard
-    from src.genre_pipeline import pipeline, schemas
+    from src.genre_extractor import pipeline, schemas
 
     bb = Blackboard(root=tmp_path / "e2e-tally" / ".build")
     bb.write_yaml(

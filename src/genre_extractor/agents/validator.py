@@ -8,7 +8,7 @@ Stage 2 (semantic, this class):
             - GenreConsistencyGuard  (iron-laws vs era vs resource_schema)
             - GenreStyleGuard        (writing-style + AI-slop)
             Each auditor tags issues with a distinct `source` field.
-Stage 3 (trial, optional):    delegated to src/genre_pipeline/trial.py
+Stage 3 (trial, optional):    delegated to src/genre_extractor/trial.py
 
 Design notes:
 - Fan-out (not single monolithic LLM call) mirrors AISlopGuard/CharacterGuard/
@@ -214,7 +214,7 @@ class GenreValidator(BaseAgent):
         # and appends its own issues (tagged with distinct `source`) to
         # genre_issues.jsonl. Isolation: one auditor failing does not cancel
         # the others; its crash is captured as a warning issue.
-        from src.genre_pipeline.auditors import (
+        from src.genre_extractor.auditors import (
             GenreConsistencyGuard,
             GenreFactChecker,
             GenreStyleGuard,

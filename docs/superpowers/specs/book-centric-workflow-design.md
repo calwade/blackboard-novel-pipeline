@@ -9,7 +9,7 @@
 
 当前仓库把流水线拆成两个对等实体：
 
-- **题材流水线** (`src/genre_pipeline/`)：输入原著 → 产物落在 `genres/<id>/`（跨作品共享）
+- **题材流水线** (`src/genre_extractor/`)：输入原著 → 产物落在 `genres/<id>/`（跨作品共享）
 - **作品流水线** (`src/pipeline.py`)：输入 `projects/<id>/` + `genres/<id>/` 合成 → 产物落在 `projects/<id>/state/`
 
 分层的代价：
@@ -62,7 +62,7 @@ projects/                                # 一本书 = 一个目录
 src/
 ├── bootstrap.py                         # 简化：只处理作品单层
 ├── pipeline.py                          # 作品流水线 + 新增 --extract-genre
-├── genre_extractor/                     # 原 genre_pipeline/ 重命名 + 重定位
+├── genre_extractor/                     # 原 genre-pipeline 模块重命名 + 重定位
 │   ├── __init__.py
 │   ├── core.py                          # 共享提取逻辑（Extractor/Drafter/Validator/Fixer 等）
 │   ├── to_project.py                    # 拆到一本书（覆盖这本书的 era.md 等）
@@ -75,7 +75,7 @@ src/
 - `genres/` → `presets/`（改名 + 语义窄化为"起点模板"）
 - 题材 4 份文件物理下沉到 `projects/<id>/` 根目录
 - 根目录 `novels/` 保留为**大池子**：用户上传目标地；新建 preset 时从池子勾选素材，被勾中的 txt 拷贝一份进 `presets/<preset-id>/novels/`（拷贝，不移动——池子保持完整）
-- `src/genre_pipeline/` 重命名为 `src/genre_extractor/`，按"产物去哪"拆两个入口
+- `src/genre_extractor/` 重命名为 `src/genre_extractor/`，按"产物去哪"拆两个入口
 
 ---
 
@@ -139,7 +139,7 @@ src/
 
 ## 5. 模块职责
 
-### 5.1 `src/genre_extractor/`（取代 `src/genre_pipeline/`）
+### 5.1 `src/genre_extractor/`（取代 `src/genre_extractor/`）
 
 **拆分**：
 - `core.py`：Extractor/Drafter/Validator/Fixer/ArcMerger/BookDistiller/auditors 的通用提取逻辑（原 `agents/` + `auditors/` 整合）。`run_extract()` / `run_merge()` / `run_draft()` / `run_validate()` 作为纯函数暴露，不关心产物落点。
@@ -316,7 +316,7 @@ def list_projects() -> list[str]: ...
 - `test_web_and_pages_sync.py`：删除 demo_snapshot 的题材层 schema 兼容 case
 - `test_setting_lint.py`：删除 `--genre` 分支；新增 `--preset` 分支
 - `test_web_genre_files_api.py`：skip 标记路由重构后改名
-- `test_genre_*`（~15 个 extractor 相关测试）：改 import path 从 `src.genre_pipeline` → `src.genre_extractor`；按 `to_project` / `to_preset` 两套重新归类
+- `test_genre_*`（~15 个 extractor 相关测试）：改 import path 从 `src.genre_extractor` → `src.genre_extractor`；按 `to_project` / `to_preset` 两套重新归类
 
 ### 9.2 新增测试
 
@@ -347,7 +347,7 @@ def list_projects() -> list[str]: ...
 **迁移副作用**（用户看到的）：
 - 原 `genres/` 目录不再存在
 - 原 `settings` 子命令报错（已删）
-- 原 `python -m src.genre_pipeline ...` 改名 `python -m src.genre_extractor ...`
+- 原 `python -m src.genre_extractor ...` 改名 `python -m src.genre_extractor ...`
 - 根目录 `novels/` 保留为大池子，不变
 
 ---

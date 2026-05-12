@@ -14,7 +14,7 @@ import pytest
 
 def _run_cli(*args) -> tuple[int, str, str]:
     """Run the CLI with args; capture stdout/stderr."""
-    cmd = [sys.executable, "-m", "src.genre_pipeline", *args]
+    cmd = [sys.executable, "-m", "src.genre_extractor", *args]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     return p.returncode, p.stdout, p.stderr
 
@@ -30,7 +30,7 @@ def test_new_genre_creates_scaffold(tmp_path, monkeypatch):
     """--new-genre in a tmp GENRES_DIR."""
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     out = pipeline.new_genre(
         "demo-cli", display_name="Demo", genre="demo", era="2020", tone="neutral"
     )
@@ -48,7 +48,7 @@ def test_new_genre_refuses_existing(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
     (tmp_path / "occupied").mkdir()
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     with pytest.raises(FileExistsError):
         pipeline.new_genre("occupied")
 
@@ -64,7 +64,7 @@ def test_extract_from_novel_dry_run(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     out = pipeline.extract_from_novel(
         "demo-extract",
         sources=[str(novel)],
@@ -85,7 +85,7 @@ def test_extract_from_novel_missing_source_raises(tmp_path, monkeypatch):
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     with pytest.raises(FileNotFoundError):
         pipeline.extract_from_novel(
             "demo-missing",
@@ -102,7 +102,7 @@ def test_fill_genre_adds_missing(tmp_path, monkeypatch):
     d.mkdir()
     (d / "genre.yaml").write_text("id: half-baked\n", encoding="utf-8")
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     out = pipeline.fill_genre("half-baked")
     assert out["ok"]
     assert set(out["filled"]) == {"era.md", "writing-style-extra.md", "iron-laws-extra.md"}
@@ -113,7 +113,7 @@ def test_fill_genre_nonexistent_raises(tmp_path, monkeypatch):
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     with pytest.raises(FileNotFoundError):
         pipeline.fill_genre("nobody")
 
@@ -122,7 +122,7 @@ def test_run_phase_requires_build_status(tmp_path, monkeypatch):
     from src import config
     monkeypatch.setattr(config, "GENRES_DIR", tmp_path)
 
-    from src.genre_pipeline import pipeline
+    from src.genre_extractor import pipeline
     # Genre exists but no .build/build_status.yaml
     (tmp_path / "no-build").mkdir()
     with pytest.raises(FileNotFoundError, match="build_status"):

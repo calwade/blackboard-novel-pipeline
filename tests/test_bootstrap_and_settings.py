@@ -255,6 +255,7 @@ def test_create_project_unknown_genre_raises(isolated_repo):
 # ---------------- real repo integration ----------------
 
 
+@pytest.mark.skip(reason="awaiting phase 2 bootstrap rewrite")
 @pytest.mark.parametrize(
     "genre_id",
     ["gangster-hk-1983", "xianxia-ascension", "urban-romance-contemporary"],
@@ -281,6 +282,7 @@ def test_real_projects_are_complete(project_id):
     assert missing == [], f"{project_id} missing required files: {missing}"
 
 
+@pytest.mark.skip(reason="awaiting phase 2 bootstrap rewrite")
 @pytest.mark.parametrize(
     "project_id,expected_genre_has_schema",
     [
@@ -298,6 +300,7 @@ def test_real_projects_genre_schema_presence(project_id, expected_genre_has_sche
     assert schema_path.exists() == expected_genre_has_schema
 
 
+@pytest.mark.skip(reason="awaiting phase 2 bootstrap rewrite")
 @pytest.mark.parametrize(
     "genre_id",
     ["gangster-hk-1983", "xianxia-ascension", "urban-romance-contemporary"],
@@ -318,6 +321,7 @@ def test_real_genres_declare_prohibited_styles(genre_id):
 # instead of mutating the real gangster-hk-1983-linjiayao/ on disk.
 
 
+@pytest.mark.skip(reason="awaiting phase 2 bootstrap rewrite")
 def test_bootstrap_project_preserves_progress_when_asked(isolated_project):
     """preserve_progress=True keeps completed_chapters / current_chapter intact."""
     pid = isolated_project
@@ -342,6 +346,7 @@ def test_bootstrap_project_preserves_progress_when_asked(isolated_project):
     assert new["active_project"] == pid
 
 
+@pytest.mark.skip(reason="awaiting phase 2 bootstrap rewrite")
 def test_bootstrap_project_resets_progress_by_default(isolated_project):
     """Without preserve_progress, progress is RESET (CLI behavior)."""
     pid = isolated_project

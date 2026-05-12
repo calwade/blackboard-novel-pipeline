@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task.
 
-**Phase Goal:** 把仓库从 `genres/<id>/` + `projects/<id>/` 两层结构迁移到 `presets/<id>/` + `projects/<id>/`（题材文件下沉）；`src/genre_pipeline/` 改名为 `src/genre_extractor/`。
+**Phase Goal:** 把仓库从 `genres/<id>/` + `projects/<id>/` 两层结构迁移到 `presets/<id>/` + `projects/<id>/`（题材文件下沉）；`src/genre_extractor/` 改名为 `src/genre_extractor/`。
 
 **所有验收自动化**：每个任务结束后 `pytest` 必须绿，无任何肉眼核对步骤。
 
@@ -18,7 +18,7 @@
 - Create: `scripts/migrate_to_book_centric.py`（下划线，便于被 pytest import）
 - Create: `tests/test_migration_script.py`
 - Create: `tests/test_phase1_checkpoint.py`（整仓状态断言）
-- Rename: `src/genre_pipeline/` → `src/genre_extractor/`
+- Rename: `src/genre_extractor/` → `src/genre_extractor/`
 - Modify: 所有 `tests/test_genre_*.py` 的 import path
 - Modify: `web/app.py`、`AGENTS.md`、`README.md` 里的 module 引用
 - Modify: `.gitignore`：`genres/*/.build/` → `presets/*/.build/`
@@ -420,10 +420,10 @@ git commit -m "chore(phase1): update .gitignore for presets/ layout"
 
 ---
 
-## Task 1.4 · 改名 `src/genre_pipeline/` → `src/genre_extractor/` + 全仓 import 修正
+## Task 1.4 · 改名 `src/genre_extractor/` → `src/genre_extractor/` + 全仓 import 修正
 
 **Files:**
-- Rename: `src/genre_pipeline/` → `src/genre_extractor/`
+- Rename: `src/genre_extractor/` → `src/genre_extractor/`
 - Modify: `src/genre_extractor/__init__.py`、`__main__.py`、`pipeline.py`（docstring / self-reference）
 - Modify: `web/app.py`
 - Modify: `tests/test_genre_*.py`（~17 个）
@@ -433,7 +433,7 @@ git commit -m "chore(phase1): update .gitignore for presets/ layout"
 
 ```bash
 set -e
-git mv src/genre_pipeline src/genre_extractor
+git mv src/genre_extractor src/genre_extractor
 ```
 
 - [ ] **Step 2:** 脚本化全仓替换
@@ -465,8 +465,8 @@ for pat in ("*.py", "*.md", "*.yml", "*.yaml", "*.txt", "*.html", "*.js", "*.css
         text = p.read_text(encoding="utf-8", errors="ignore")
         if "genre_pipeline" not in text:
             continue
-        new = text.replace("src.genre_pipeline", "src.genre_extractor") \
-                  .replace("src/genre_pipeline", "src/genre_extractor") \
+        new = text.replace("src.genre_extractor", "src.genre_extractor") \
+                  .replace("src/genre_extractor", "src/genre_extractor") \
                   .replace("genre_pipeline/", "genre_extractor/")
         if new != text:
             p.write_text(new, encoding="utf-8")
@@ -491,7 +491,7 @@ See docs/superpowers/specs/book-centric-workflow-design.md for the full design.
 """
 ```
 
-- [ ] **Step 4:** 修整 `src/genre_extractor/__main__.py` 顶部 docstring，把 `python3 -m src.genre_pipeline ...` 改为 `python3 -m src.genre_extractor ...`。**不改命令行标志**（`--new-genre` 等保留，Phase 2 重构）。
+- [ ] **Step 4:** 修整 `src/genre_extractor/__main__.py` 顶部 docstring，把 `python3 -m src.genre_extractor ...` 改为 `python3 -m src.genre_extractor ...`。**不改命令行标志**（`--new-genre` 等保留，Phase 2 重构）。
 
 - [ ] **Step 5:** 自动化断言
 
@@ -542,7 +542,7 @@ Expected: 全 PASS
 
 ```bash
 git add -A
-git commit -m "refactor(phase1): rename src/genre_pipeline → src/genre_extractor + update all references"
+git commit -m "refactor(phase1): rename src/genre_extractor → src/genre_extractor + update all references"
 ```
 
 ---
