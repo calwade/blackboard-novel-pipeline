@@ -88,10 +88,10 @@ src/
 1. 基本信息：书名、主角名、目标章数
 2. **题材起点三选一**：
    - **从 preset 拷贝**（推荐）：下拉选 `presets/` 下现有 preset → 拷贝 4 份文件到新作品目录
-   - **从原著拆**：选 preset 下的原著素材（或手选文件）→ 后台跑提取 → 直接落进新作品
+   - **从原著拆**：从 `novels/` 大池子勾选 txt（或上传新的——上传走现有 `/api/novels/upload` 先落池子再勾选）→ 后台跑提取 → 直接落进新作品
    - **最小脚手架**：产出 4 份空壳，用户之后手填
-3. 大纲起点：粘贴一段"故事梗概"自动生成 outline.json，或跳过产生空壳
-4. 角色起点：同上逻辑
+3. **大纲起点**：粘贴一段"故事梗概"（自由文本）由 LLM 生成 `outline.json`（含 N 章章节骨架）；或直接跳过产出空壳 outline
+4. **角色起点**：粘贴一段"主要人物简介"由 LLM 生成 `characters.yaml`；或直接跳过产出只含主角占位的空壳
 
 向导结束后作品 ready。
 
@@ -172,14 +172,34 @@ src/
 # 新签名
 def bootstrap_project(project_id: str, *, preserve_progress: bool = False) -> BootstrapResult: ...
 
-def create_project(project_id: str, *, from_preset: str | None = None) -> Path:
-    """从 preset 拷 4 份题材文件到新作品；preset=None 时产出空壳。"""
+def create_project(
+    project_id: str,
+    *,
+    # 第 1 步：基本信息
+    display_name: str,
+    protagonist_name: str,
+    chapter_count_target: int,
+    # 第 2 步：题材起点三选一（互斥）
+    from_preset: str | None = None,        # 从 presets/<id>/ 拷 4 份题材文件
+    from_extract: dict | None = None,      # {"sources": [...], "with_trial": bool} 异步触发提取
+    blank_genre: bool = False,             # 空壳 4 份
+    # 第 3 步：大纲起点（二选一）
+    outline_synopsis: str | None = None,   # LLM 生成 outline.json
+    blank_outline: bool = False,           # 空壳 outline
+    # 第 4 步：角色起点（二选一）
+    characters_brief: str | None = None,   # LLM 生成 characters.yaml
+    blank_characters: bool = False,        # 只含主角占位
+) -> Path:
+    """创建作品目录 + 4 步向导的所有落地文件。同步返回（第 2 步的 from_extract 是异步，
+    返回时作品目录已创建但 era.md 等在后台继续生成，UI 通过 progress API 轮询）。"""
 
 def list_presets() -> list[str]: ...
 def list_projects() -> list[str]: ...
 
 # 移除：原 validate_genre / 原 genre_id 合并逻辑
 ```
+
+**大纲/角色生成的 LLM agent**：新增 `src/agents/outline_drafter.py` 和 `src/agents/characters_drafter.py`（轻量 agent，单次调用）。复用 `BaseAgent`。
 
 ### 5.3 `src/pipeline.py`
 
@@ -231,7 +251,7 @@ def list_projects() -> list[str]: ...
 | `DELETE /api/genres/<id>` | `DELETE /api/presets/<id>` | 内置 3 个禁删 |
 | `GET /novels` | `GET /novels` | **保留**（大池子） |
 | `POST /api/novels/upload` | `POST /api/novels/upload` | **保留**（上传到大池子） |
-| `DELETE /api/novels/<name>` | `DELETE /api/novels/<name>` | **保留**；若 txt 已被任一 preset 引用则阻止/警告 |
+| `DELETE /api/novels/<name>` | `DELETE /api/novels/<name>` | **保留**；若 txt 已被任一 preset 引用，响应 `{ok:true, warning: "..."}` 并返回被引用的 preset 列表；前端展示警告后用户二次确认才真删（body 带 `force: true`） |
 | `GET /api/novels` | `GET /api/novels` | **保留**；响应字段补 `used_by_presets: [preset-id, ...]` |
 | `GET /api/novels/<name>/preview` | 同 | 保留 |
 
@@ -239,9 +259,12 @@ def list_projects() -> list[str]: ...
 
 | 路由 | 说明 |
 |---|---|
+| `POST /api/projects/new` | 升级：body 含 4 步向导全字段（映射到 `create_project()` 签名） |
 | `POST /api/projects/<id>/extract-genre` | 从原著拆题材并落进这本书，body 含 `sources: [from-pool txt names]` |
 | `GET /api/projects/<id>/extract-genre/progress` | 进度轮询 |
 | `POST /api/projects/<id>/extract-genre/abort` | 中断 |
+| `POST /api/projects/<id>/draft-outline` | 粘贴梗概生成/重生 outline.json（同步，LLM 单次调用） |
+| `POST /api/projects/<id>/draft-characters` | 粘贴人物简介生成/重生 characters.yaml（同步） |
 
 ### 7.3 向导变动
 
@@ -299,10 +322,12 @@ def list_projects() -> list[str]: ...
 
 - `test_extract_to_project.py`：核心 happy path + 覆盖现有文件行为 + backup 行为
 - `test_extract_to_preset.py`：核心 happy path + novels 从大池子拷贝 + 禁改内置 preset
-- `test_bootstrap_book_centric.py`：新签名 + preset 拷贝 + 幂等
+- `test_bootstrap_book_centric.py`：新签名 + preset 拷贝 + 幂等 + 4 步向导各字段落位正确（3 个题材起点 × 2 个大纲起点 × 2 个角色起点的关键组合）
 - `test_web_presets_api.py`：新路由全量（列表/详情/新建 from-novel with pool-picked sources/删除内置 403）
 - `test_web_project_extract_genre.py`：`POST /api/projects/<id>/extract-genre` 全量
-- `test_web_novels_usage.py`：`GET /api/novels` 返回 `used_by_presets` 字段；`DELETE /api/novels/<name>` 对被引用素材的行为
+- `test_web_novels_usage.py`：`GET /api/novels` 返回 `used_by_presets` 字段；`DELETE /api/novels/<name>` 首次返回 warning + preset 列表；body `force:true` 才真删
+- `test_outline_drafter.py` / `test_characters_drafter.py`：两个轻量 agent 的 prompt 构造 + 输出 schema 校验
+- `test_web_draft_endpoints.py`：`POST /api/projects/<id>/draft-outline` + `/draft-characters` 正常路径 + 空 synopsis 返回空壳 + LLM 失败的 fallback
 - `test_migration_script.py`：migrate 脚本幂等 + 产物结构正确（genres/ 已删 + presets/ 有 3 份 + 作品目录各有 4 份题材文件 + `novels/` 根目录保持不动）
 
 ### 9.3 保留
@@ -344,11 +369,11 @@ def list_projects() -> list[str]: ...
 - [ ] 根目录 `novels/` 保持为大池子（不变）；每个 preset 下有空的 `novels/`
 - [ ] 3 本内置作品目录下各有完整 4 份题材文件
 - [ ] `python -m src.pipeline --chapter 1`（任一内置作品激活后）能跑通
-- [ ] Web `/` 新建作品向导 4 步走完能 ready；3 个题材起点都 work
+- [ ] Web `/` 新建作品向导 4 步走完能 ready；3 个题材起点 × 大纲起点（梗概 / 空壳）× 角色起点（简介 / 空壳）关键组合都 work
 - [ ] Web `/presets` 列出 3 个 preset；可以新建第 4 个 from-novel（从 `/novels` 大池子勾选素材）
-- [ ] Web `/novels` 大池子保留，GET 响应含 `used_by_presets` 字段
+- [ ] Web `/novels` 大池子保留，GET 响应含 `used_by_presets` 字段；删除被引用素材要二次确认
 - [ ] Web 作品首页「⎇ 从原著覆盖当前题材配置」work（从池子勾选）
-- [ ] 测试套件全绿（新增 7 个测试文件 + 改写 12 个）
+- [ ] 测试套件全绿（新增 9 个测试文件 + 改写 12 个）
 - [ ] 文档无"从 X 改为 Y"叙事
 - [ ] `CHANGELOG.md` 记录本次重构
 
@@ -357,5 +382,5 @@ def list_projects() -> list[str]: ...
 ## 13. 非目标
 
 - 本 spec 不覆盖 "resource_schema 的语义扩展" / "novels 素材的批量标签" / "preset 从 Web 导入社区 pack" 等未来能力
-- 本 spec 不改动 Agent 名册、规则文件（`rules/`）、写作风格等运行时语义
+- 本 spec 不改动 Agent 名册（仅新增 2 个轻量向导 agent：OutlineDrafter / CharactersDrafter）、规则文件（`rules/`）、写作风格等运行时语义
 - 本 spec 不改动章节流水线的主循环逻辑（Planner→Generator→Evaluator→Fixer→Summarizer + 记账 + 审计）
