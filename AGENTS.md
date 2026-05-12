@@ -41,6 +41,37 @@ python -m src.bootstrap --new-project my-new-book --genre gangster-hk-1983
 python -m src.bootstrap --project my-new-book
 ```
 
+## 题材流水线（Genre Pipeline）
+
+除了作品流水线（每章 Planner→Generator→Evaluator→Fixer→Summarizer），系统还有一条**题材流水线**：用于建 / 补 / 审 / 从已有小说拆解题材包。产物是 `genres/<id>/` 下的 4-5 份文件，跨作品复用。
+
+```bash
+# 从零手建（脚手架，不调 LLM）
+python -m src.genre_pipeline --new-genre <id> --name "..." --era "..."
+
+# 补齐缺失文件（不调 LLM）
+python -m src.genre_pipeline --fill-genre <id>
+
+# 审查已有题材（Stage 1 结构校验 + Stage 2 LLM 语义）
+python -m src.genre_pipeline --audit-genre <id>
+
+# 从已有小说拆解题材规范（核心场景）
+python -m src.genre_pipeline --extract-from-novel <id> \
+    --sources novels/a.txt,novels/b.txt [--with-trial]
+```
+
+机制要点：
+- 复用 `Blackboard` / `BaseAgent`（已下沉到 `src/core/`）
+- 滑动窗口 25 章/批，三档自适应（≤50:10 / 51-600:25 / >600:40）
+- `genres/<id>/.build/`（进 `.gitignore`）是构建期工作目录：`build_status.yaml` + `extraction_notes/batch-NNN.yaml` + `genre_blueprint.yaml` + `genre_issues.jsonl`
+- Extractor 笔记严格 schema，字段对齐最终 4 份题材文件，带 `evidence_chapters` / `confidence`
+- 默认只跑结构 + LLM 语义校验（秒级+分钟级）；`--with-trial` 显式开启试验书 3 章真实验收（v1 为占位，下次迭代接入 `calibrate_evaluator` 骨架）
+- Intent Router：`--extract-only` / `--merge-only` / `--draft-only` / `--validate-only` 可断点续跑单个 phase
+
+规范文档：
+- 设计：[`docs/superpowers/specs/2026-05-11-genre-pipeline-design.md`](docs/superpowers/specs/2026-05-11-genre-pipeline-design.md)
+- 实施：[`docs/superpowers/plans/2026-05-11-genre-pipeline.md`](docs/superpowers/plans/2026-05-11-genre-pipeline.md)
+
 ## 架构 1 行说明
 
 每个 Agent = 一次独立 LLM 调用 + 独立 system prompt + 只读它需要的 state/ 文件。详见 [docs/superpowers/specs/2026-05-09-novelforge-design.md](docs/superpowers/specs/2026-05-09-novelforge-design.md)。
