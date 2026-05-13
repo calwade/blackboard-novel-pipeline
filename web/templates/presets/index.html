@@ -27,10 +27,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='presets.js') }}" defer></script>
-<script defer>
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.GenreUI && window.GenreUI.initIndex) window.GenreUI.initIndex();
-  });
-</script>
+<script type="module" src="{{ url_for('static', filename='js/features/presetsList.js') }}"></script>
 {% endblock %}

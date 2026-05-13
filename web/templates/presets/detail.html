@@ -49,10 +49,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='presets.js') }}" defer></script>
-<script defer>
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.GenreUI && window.GenreUI.initDetail) window.GenreUI.initDetail({{ preset_id|tojson }});
-  });
-</script>
+<script type="module" src="{{ url_for('static', filename='js/features/presetsDetail.js') }}"></script>
 {% endblock %}
