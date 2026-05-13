@@ -11,6 +11,12 @@
   </p>
 </section>
 
+<section class="genre-hero-cta">
+  <a href="/presets/new" class="btn btn-primary btn-lg">
+    <span class="btn-glyph">+</span>新建 preset
+  </a>
+</section>
+
 <section class="genre-grid-wrap">
   <div class="col-header col-header-genres">
     <span class="col-title">所有题材</span>
@@ -24,56 +30,6 @@
     </div>
   </div>
 </section>
-
-<section class="genre-panel genre-panel-wide" id="extract-form-section">
-  <div class="genre-panel-head">
-    <h3 class="genre-panel-title">＋ 从原著拆出新 preset</h3>
-    <p class="genre-panel-sub">
-      从 <a href="/novels">素材库</a> 选 1-N 份原著 (.txt)，命名新题材，后台启动 extract → merge → draft → validate 四阶段流水线。
-    </p>
-  </div>
-
-  <form id="new-from-novel-form" class="extract-form">
-    <div class="form-row">
-      <label for="f-new-id">新题材 id</label>
-      <input type="text" id="f-new-id" name="id" required
-             placeholder="e.g. wuxia-jianghu"
-             pattern="[a-z0-9][a-z0-9-]*"
-             title="小写字母 / 数字 / 连字符" />
-    </div>
-
-    <div class="form-row">
-      <label>选择原著源文件</label>
-      <div class="picker-summary" id="picker-summary">加载中…</div>
-      <div class="picker-body" id="picker-body">
-        <div class="placeholder">
-          <div class="placeholder-title">加载 /api/novels…</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="form-row form-row-check">
-      <label class="check-line">
-        <input type="checkbox" id="f-with-trial" name="with_trial" />
-        <span>with_trial — 拆解后立刻跑 3 章试验书（耗时较长）</span>
-      </label>
-    </div>
-
-    <div class="form-row form-row-actions">
-      <button type="submit" class="btn btn-primary" id="btn-submit" disabled>
-        <span class="btn-glyph">⎇</span><span id="submit-label">启动拆解</span>
-      </button>
-      <div class="form-error" id="f-error" hidden></div>
-    </div>
-  </form>
-
-  <div class="progress-box" id="progress-box" hidden>
-    <div class="progress-line">
-      <strong id="progress-title">启动中…</strong>
-      <span id="progress-detail">等待后台响应</span>
-    </div>
-  </div>
-</section>
 {% endblock %}
 
 {% block scripts %}
@@ -81,7 +37,6 @@
 <script defer>
   document.addEventListener('DOMContentLoaded', () => {
     if (window.GenreUI && window.GenreUI.initIndex) window.GenreUI.initIndex();
-    if (window.GenreUI && window.GenreUI.initNewFromNovel) window.GenreUI.initNewFromNovel();
   });
 </script>
 {% endblock %}

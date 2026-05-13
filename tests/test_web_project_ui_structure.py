@@ -70,20 +70,21 @@ def test_preset_detail_template_uses_preset_id_not_gid():
 
 
 def test_preset_templates_have_no_dead_routes():
-    """Phase 5 cleanup: no links to removed routes (/presets/new, /presets/<id>/extract).
+    """Phase 5 cleanup: no links to removed routes (/presets/<id>/extract).
 
     Scope is web/ only (docs/plans may still mention historical routes).
-    Excludes /api/presets/new-from-novel which is a valid current endpoint.
+    Excludes /api/presets/new-from-novel / new-blank / new-from-description
+    which are valid current endpoints. /presets/new is also a valid current
+    page (the 3-tab creation wizard added in Task 4).
     """
     import subprocess
     # Look only inside web/ and match ONLY the dead routes as HREFs or URL literals.
     # Patterns:
-    #   href="/presets/new"           — old "new empty genre" page
     #   href="/presets/<anything>/extract..."  — old extract flow
-    #   /api/presets/new"  or  /api/presets/new'  (exact /new, not /new-from-novel)
+    #   /api/presets/new"  or  /api/presets/new'  (exact /new, not /new-from-novel etc.)
     result = subprocess.run(
         ["git", "grep", "-nE",
-         r"href=\"/presets/new\"|href=\"/presets/[^\"]+/extract|/api/presets/new[\"']",
+         r"href=\"/presets/[^\"]+/extract|/api/presets/new[\"']",
          "--", "web/"],
         capture_output=True, text=True, cwd=REPO,
     )
