@@ -1,6 +1,6 @@
-{% import "_macros/forms.html" as forms %}
 <!-- =========================================================
      OVERRIDE GENRE dialog (⎇ button on project home, Phase 4 Task 4.7)
+     Submits to /api/jobs and redirects to /jobs/<id>; no inline progress.
      ========================================================= -->
 <dialog id="extract-override-dialog" class="dlg">
   <div class="dlg-header">
@@ -25,15 +25,5 @@
         <button type="submit" class="btn btn-primary">▶ 开始拆解</button>
       </div>
     </form>
-    <div id="extract-override-progress" hidden>
-      <div class="wizard-status">
-        {{ forms.phase_timeline() }}
-        <div class="wizard-status-row">
-          <div class="wizard-status-mark">◐</div>
-          <div class="wizard-status-text">正在拆解…（每批 25 章 · 滑动窗口 · 可能数分钟）</div>
-          <button type="button" class="btn btn-danger btn-sm" id="btn-extract-abort">⏹ 中断</button>
-        </div>
-      </div>
-    </div>
   </div>
 </dialog>

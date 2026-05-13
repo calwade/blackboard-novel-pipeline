@@ -1,12 +1,14 @@
 /* =========================================================
    features/extractOverride.js — ⎇ button on project home.
-   POSTs /api/projects/<pid>/extract-genre → 202 + pollExtractProgress.
+   Submits POST /api/jobs with kind `extract-to-project` and
+   redirects the user to /jobs/<job_id> where they can watch
+   progress. The dialog closes implicitly via navigation.
    ========================================================= */
 
 import { $ } from '../utils.js';
 import { apiCall, toast } from '../api.js';
 import { state } from '../state.js';
-import { renderNovelsCheckboxes, pollExtractProgress } from './projectWizard.js';
+import { renderNovelsCheckboxes } from './projectWizard.js';
 
 export function initExtractOverride() {
   const btn = $('#btn-extract-genre-override');
@@ -31,10 +33,14 @@ export function initExtractOverride() {
         box.innerHTML = `<span class="form-error">加载失败: ${e.message}</span>`;
       }
     }
-    // Reset progress state
-    $('#extract-override-progress').hidden = true;
+    // Reset error state; re-enable the form in case it was disabled by a
+    // prior attempt in the same page view.
     const errEl = $('#extract-override-error');
     if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+    const form = $('#extract-override-form');
+    if (form) {
+      form.querySelectorAll('button, input').forEach((n) => { n.disabled = false; });
+    }
     dlg.showModal();
   };
 
@@ -56,30 +62,33 @@ export function initExtractOverride() {
         return;
       }
       try {
-        const r = await fetch(`/api/projects/${encodeURIComponent(pid)}/extract-genre`, {
+        form.querySelectorAll('button, input').forEach((n) => { n.disabled = true; });
+        const r = await fetch('/api/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            kind: 'extract-to-project',
+            target: { type: 'project', id: pid },
             sources,
-            with_trial: fd.get('override_with_trial') === 'on',
+            params: {
+              with_trial: fd.get('override_with_trial') === 'on',
+            },
           }),
         });
         const body = await r.json().catch(() => ({}));
-        if (r.status !== 202 && !r.ok) {
-          const reason = body.reason || body.detail || body.error || ('HTTP ' + r.status);
+        if (!r.ok) {
+          const reason = body.error || body.reason || body.detail || ('HTTP ' + r.status);
           throw new Error(reason);
         }
-        // Show progress area, hide form
-        $('#extract-override-progress').hidden = false;
-        form.querySelectorAll('button, input').forEach((n) => { n.disabled = true; });
-        // For the ⎇ override path there's no post-creation work to do —
-        // a successful extract just needs to reload the page so the new
-        // genre files surface in the project UI.
-        pollExtractProgress(pid).then((ok) => {
-          if (ok) setTimeout(() => location.reload(), 400);
-        });
+        const jobId = body.job_id;
+        if (!jobId) {
+          throw new Error('后端没返回 job_id');
+        }
+        toast('已排入题材拆解任务');
+        location.href = '/jobs/' + encodeURIComponent(jobId);
       } catch (e2) {
         if (errEl) { errEl.textContent = '失败: ' + e2.message; errEl.hidden = false; }
+        form.querySelectorAll('button, input').forEach((n) => { n.disabled = false; });
       }
     };
   }

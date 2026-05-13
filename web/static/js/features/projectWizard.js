@@ -6,19 +6,17 @@
      4) characters starter (brief / blank)
 
    Submits to POST /api/projects/new.
-   If from_extract path → backend responds 202 with project_id; we poll
-   /api/projects/<pid>/extract-genre/progress until done, then reload.
+   If genre_starter === 'extract', the project is first created with a
+   blank genre scaffold, then a POST /api/jobs is queued with kind
+   `extract-to-project`, and the browser is redirected to
+   /jobs/<job_id> where the user watches progress.
 
-   Exports `renderNovelsCheckboxes` + `pollExtractProgress` because
-   features/extractOverride.js re-uses them.
+   Exports `renderNovelsCheckboxes` so features/extractOverride.js can
+   re-use the checkbox rendering helper.
    ========================================================= */
 
 import { $, $$ } from '../utils.js';
 import { apiCall, toast } from '../api.js';
-import { pollExtractProgress } from './extractProgress.js';
-
-// Re-export so existing importers (features/extractOverride.js) keep working.
-export { pollExtractProgress } from './extractProgress.js';
 
 export async function openNewProjectWizard() {
   // Close the picker if open
@@ -213,13 +211,19 @@ async function wizardSubmit() {
     chapter_count_target: Number(fd.get('chapter_count_target')),
   };
 
+  // Extract sources are only used to queue the extract-to-project job
+  // AFTER the project skeleton has been created. They are NOT sent
+  // in the /api/projects/new payload (the backend now rejects that).
+  let extractSources = [];
+  let extractWithTrial = false;
+
   if (starter === 'preset') {
     payload.from_preset = fd.get('from_preset');
   } else if (starter === 'extract') {
-    payload.from_extract = {
-      sources: fd.getAll('extract_source'),
-      with_trial: fd.get('extract_with_trial') === 'on',
-    };
+    extractSources = fd.getAll('extract_source');
+    extractWithTrial = fd.get('extract_with_trial') === 'on';
+    // Create project with blank genre first; job will overwrite genre files.
+    payload.blank_genre = true;
   } else {
     payload.blank_genre = true;
   }
@@ -250,9 +254,7 @@ async function wizardSubmit() {
     statusEl.hidden = false;
     statusEl.classList.remove('is-done', 'is-error');
     if (markEl) markEl.textContent = '◐';
-    if (textEl) textEl.textContent = starter === 'extract'
-      ? '已提交 · 正在拆解题材（慢，后台运行）…'
-      : '正在创建作品…';
+    if (textEl) textEl.textContent = '正在创建作品…';
   }
   if (submitBtn) submitBtn.disabled = true;
 
@@ -262,46 +264,49 @@ async function wizardSubmit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (r.status === 202) {
-      // Async extract path — poll progress. Draft calls run AFTER extraction
-      // finishes, so the user sees: extract → merge → draft (LLM) → validate
-      // → "起草大纲…" → "起草人物…" → reload.
-      const data = await r.json();
-      if (textEl) textEl.textContent = '后台拆解中…（可关闭对话框，状态栏会继续轮询）';
-      const pid = data.project_id || payload.id;
-      const extractOk = await pollExtractProgress(pid);
-      if (!extractOk) return;
-      await runPostCreationDrafts(pid, {
-        synopsis: willDraftOutline ? synopsis : '',
-        brief: willDraftCharacters ? brief : '',
-        statusEl, textEl, markEl,
-      });
-      if (statusEl) {
-        statusEl.classList.add('is-done');
-        if (markEl) markEl.textContent = '✓';
-        if (textEl) textEl.textContent = '已创建 · 正在激活…';
-      }
-      try {
-        await apiCall('/api/projects/activate', {
-          method: 'POST',
-          body: JSON.stringify({ id: pid }),
-        });
-      } catch (_) { /* best-effort */ }
-      toast('已创建并激活 · ' + pid);
-      setTimeout(() => location.reload(), 400);
-      return;
-    }
     const body = await r.json().catch(() => ({}));
     if (!r.ok || body.ok === false) {
       const reason = body.reason || body.detail || body.error || ('HTTP ' + r.status);
       throw new Error(reason);
     }
+
+    const pid = payload.id;
+
     // Sync path: skeleton + bootstrap done. Now fire draft calls if needed.
-    await runPostCreationDrafts(payload.id, {
+    await runPostCreationDrafts(pid, {
       synopsis: willDraftOutline ? synopsis : '',
       brief: willDraftCharacters ? brief : '',
       statusEl, textEl, markEl,
     });
+
+    // If user picked "从原著拆", queue an extract-to-project job now and
+    // redirect to the job detail page so they can watch progress.
+    if (starter === 'extract') {
+      if (textEl) textEl.textContent = '已创建作品 · 正在排入题材拆解任务…';
+      const jobResp = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'extract-to-project',
+          target: { type: 'project', id: pid },
+          sources: extractSources,
+          params: { with_trial: extractWithTrial },
+        }),
+      });
+      const jobBody = await jobResp.json().catch(() => ({}));
+      if (!jobResp.ok) {
+        const reason = jobBody.error || jobBody.reason || ('HTTP ' + jobResp.status);
+        throw new Error('创建题材任务失败: ' + reason);
+      }
+      const jobId = jobBody.job_id;
+      if (!jobId) {
+        throw new Error('后端没返回 job_id');
+      }
+      toast('已创建作品并排入题材拆解任务');
+      location.href = '/jobs/' + encodeURIComponent(jobId);
+      return;
+    }
+
     if (statusEl) {
       statusEl.classList.add('is-done');
       if (markEl) markEl.textContent = '✓';
@@ -311,10 +316,10 @@ async function wizardSubmit() {
     try {
       await apiCall('/api/projects/activate', {
         method: 'POST',
-        body: JSON.stringify({ id: payload.id }),
+        body: JSON.stringify({ id: pid }),
       });
     } catch (_) { /* activation best-effort */ }
-    toast('已创建并激活 · ' + payload.id);
+    toast('已创建并激活 · ' + pid);
     setTimeout(() => location.reload(), 400);
   } catch (e) {
     if (statusEl) {

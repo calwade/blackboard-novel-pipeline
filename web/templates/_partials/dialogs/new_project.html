@@ -1,4 +1,3 @@
-{% import "_macros/forms.html" as forms %}
 <!-- =========================================================
      NEW PROJECT WIZARD (4-step, Phase 4 Task 4.7)
        1) 基本信息
@@ -124,11 +123,9 @@
         </label>
         <div class="form-error" data-wizard-error="4" hidden></div>
         <div class="wizard-status" id="np-create-status" hidden>
-          {{ forms.phase_timeline() }}
           <div class="wizard-status-row">
             <div class="wizard-status-mark">◐</div>
             <div class="wizard-status-text">提交中…</div>
-            <button type="button" class="btn btn-danger btn-sm" id="np-btn-abort" hidden>⏹ 中断</button>
           </div>
         </div>
         <div class="form-actions">
