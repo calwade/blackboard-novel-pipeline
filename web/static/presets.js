@@ -360,10 +360,181 @@
     setTimeout(() => pollJobStatus(pid), 3000);
   }
 
+  // ======================================================
+  // /presets/new · 3-tab page
+  // ======================================================
+
+  function initNewPage() {
+    // Tab switching
+    const tabs = document.querySelectorAll('.tabs-preset-new .tab');
+    const panels = document.querySelectorAll('[data-panel]');
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.toggle('tab-active', x === t));
+      const active = t.dataset.tab;
+      panels.forEach(p => p.hidden = p.dataset.panel !== active);
+    }));
+
+    initFromNovelForm();
+    initFromDescriptionForm();
+    initBlankForm();
+  }
+
+  function initFromNovelForm() {
+    const form = document.getElementById('form-from-novel');
+    if (!form) return;
+    // Load novels pool into picker-body
+    fetch('/api/novels').then(r => r.json()).then(data => {
+      const body = document.getElementById('picker-body');
+      const summary = document.getElementById('picker-summary');
+      body.innerHTML = '';
+      const novels = (data && data.novels) || [];
+      summary.textContent = novels.length + ' 份素材';
+      for (const n of novels) {
+        const lbl = document.createElement('label');
+        lbl.className = 'check-line';
+        lbl.innerHTML = `<input type="checkbox" name="source" value="${n.name}"> ${n.name}`;
+        body.appendChild(lbl);
+      }
+      // Enable submit when >=1 checked
+      body.addEventListener('change', () => {
+        const checked = body.querySelectorAll('input[name=source]:checked').length;
+        document.getElementById('fn-submit').disabled = checked === 0;
+      });
+    }).catch(() => {
+      const summary = document.getElementById('picker-summary');
+      if (summary) summary.textContent = '加载素材库失败';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const sources = fd.getAll('source');
+      const payload = {
+        id: fd.get('id'),
+        sources,
+        with_trial: fd.get('with_trial') === 'on',
+      };
+      const err = document.getElementById('fn-error');
+      err.hidden = true;
+      try {
+        const r = await fetch('/api/presets/new-from-novel', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+        });
+        if (r.status === 202) {
+          const data = await r.json();
+          pollPresetJob(data.preset_id);
+        } else {
+          const d = await r.json();
+          err.textContent = d.reason || r.status;
+          err.hidden = false;
+        }
+      } catch (ex) {
+        err.textContent = String(ex);
+        err.hidden = false;
+      }
+    });
+  }
+
+  function initFromDescriptionForm() {
+    const form = document.getElementById('form-from-description');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const payload = {
+        id: fd.get('id'),
+        display_name: fd.get('display_name'),
+        tone: fd.get('tone') || '',
+        description: fd.get('description'),
+      };
+      const err = document.getElementById('fd-error');
+      err.hidden = true;
+      try {
+        const r = await fetch('/api/presets/new-from-description', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+        });
+        if (r.status === 202) {
+          const data = await r.json();
+          pollPresetJob(data.preset_id);
+        } else {
+          const d = await r.json();
+          err.textContent = d.reason || r.status;
+          err.hidden = false;
+        }
+      } catch (ex) {
+        err.textContent = String(ex);
+        err.hidden = false;
+      }
+    });
+  }
+
+  function initBlankForm() {
+    const form = document.getElementById('form-blank');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const payload = {
+        id: fd.get('id'),
+        display_name: fd.get('display_name'),
+        tone: fd.get('tone') || '',
+      };
+      const err = document.getElementById('fb-error');
+      err.hidden = true;
+      try {
+        const r = await fetch('/api/presets/new-blank', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          location.href = '/presets/' + data.preset_id;
+        } else {
+          const d = await r.json();
+          err.textContent = d.reason || r.status;
+          err.hidden = false;
+        }
+      } catch (ex) {
+        err.textContent = String(ex);
+        err.hidden = false;
+      }
+    });
+  }
+
+  async function pollPresetJob(pid) {
+    const box = document.getElementById('progress-box');
+    const title = document.getElementById('progress-title');
+    if (box) box.hidden = false;
+    if (title) title.textContent = '正在处理：' + pid;
+    for (let i = 0; i < 600; i++) {
+      try {
+        const r = await fetch(`/api/presets/${pid}/status`);
+        const s = await r.json();
+        if (s.state === 'done') {
+          location.href = '/presets/' + pid;
+          return;
+        }
+        if (s.state === 'failed') {
+          if (title) title.textContent = '失败：' + (s.error || '');
+          return;
+        }
+      } catch (e) {
+        console.warn('poll error', e);
+      }
+      await new Promise(res => setTimeout(res, 1000));
+    }
+  }
+
   // Expose
   window.GenreUI = {
     initIndex: initIndex,
     initDetail: initDetail,
     initNewFromNovel: initNewFromNovel,
+    initNewPage: initNewPage,
   };
 })();

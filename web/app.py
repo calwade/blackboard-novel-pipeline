@@ -344,6 +344,11 @@ def view_presets_index():
     return render_template("presets/index.html")
 
 
+@app.get("/presets/new")
+def view_preset_new():
+    return render_template("presets/new.html")
+
+
 @app.get("/presets/<pid>")
 def view_preset_detail(pid: str):
     pd = _preset_dir(pid)
