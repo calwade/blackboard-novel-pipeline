@@ -26,6 +26,16 @@ python -m src.pipeline --range 1-3                            # 跑前三章
 flask --app web.app run --port 5055                           # 启动演示页
 ```
 
+### 部署模式
+
+- **开发**：`flask --app web.app run --port 5055`（单进程 + 调试）
+- **生产**：`gunicorn --workers 1 --threads 8 "web.app:app"` — **必须 `--workers 1`**
+
+> 内存里的 job 缓存（`_JOBS`）和 target 互斥锁（`_TARGET_LOCKS`）都是进程级的。
+> 多 worker 会让同一个 job 只在其中一个 worker 上可见，UI 轮询其他 worker 时会拿到
+> `unknown`。如要横向扩展，需要把 job cache 迁到共享存储（参见
+> `docs/superpowers/specs/genre-jobs-rearch.md`）。
+
 切换作品只需重新 bootstrap，无需改代码：
 
 ```bash
@@ -154,6 +164,26 @@ python -m src.genre_extractor --to-preset <id> --validate-only
 | `state/packaging.json` | 出版包装产物（书名/简介/封面/标签） | PackagingAgent（独立运行 `--packaging`） |
 
 **另外**：`projects/.active` 是一个单行文本文件，记录当前激活的 project id。这让工具（web / lint / calibrate）能自动找到"当前这本书"。
+
+## 题材任务（Genre Jobs）
+
+每个"新建题材" / "覆盖作品题材"操作（原著拆 / 描述生成 / 空壳 / 作品覆盖）都会产生一个 **Job**，落盘到仓库根的 `.jobs/` 目录（已在 `.gitignore`）：
+
+| 路径 | 内容 |
+|---|---|
+| `.jobs/active/<job_id>.json` | 未完成的 job（state ∈ running / aborting） |
+| `.jobs/archive/<job_id>.json` | 已结束（state ∈ done / failed / aborted / interrupted） |
+| `.jobs/logs/<job_id>.log` | 运行日志（rotating 10MB × 3 份） |
+
+**Web 入口**：`/jobs` 列表 + `/jobs/<id>` 详情页（节点图 + 日志 tail）。首页顶栏 pill `⚙ N 个题材任务运行中` 可一键跳转。
+
+**API**：`/api/jobs` REST（POST 创建 / GET 列表 / GET 详情 / DELETE / POST abort）+ `/api/jobs/<id>/log?offset=N` 日志尾随。
+
+**关键特性**：
+- **不限并发**：每个 job 独立线程 + 按 target（preset id / project id）互斥。同一 target 不允许两个 job 并跑；不同 target 完全并行（且与章节流水线互不阻塞）。
+- **真 abort**：`CancelToken` 协议（`src.jobs.cancel`）贯穿 4 个 phase 边界和 extract batch 循环，`POST /api/jobs/<id>/abort` 在 30 秒内让 worker 真正退出。
+- **进程崩溃恢复**：启动时 `JobStore.recover()` 把 `active/` 里 state=running/aborting 的孤儿 job 翻成 `interrupted`。
+- **不污染 git**：`.jobs/` 目录整体 `.gitignore`。
 
 ## Agent 名册
 
