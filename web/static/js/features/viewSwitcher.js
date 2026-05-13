@@ -84,10 +84,17 @@ function applyViewUI(view) {
   $('#view-btn-novel').setAttribute('aria-selected', view === VIEW_NOVEL);
   $('#view-btn-genre').setAttribute('aria-selected', view === VIEW_GENRE);
 
-  const selector = $('#genre-job-selector');
-  selector.style.display = view === VIEW_GENRE ? '' : 'none';
+  // 顶栏内所有 .view-novel-only / .view-genre-only 元素按当前视图显隐。
+  // 元素自带 style="display:none" 初始态，由这里统一翻转；不用 CSS-only
+  // 方案（body[data-view]）是为了保留元素自身 display 原值的复杂性。
+  document.querySelectorAll('.view-novel-only').forEach((el) => {
+    el.style.display = view === VIEW_NOVEL ? '' : 'none';
+  });
+  document.querySelectorAll('.view-genre-only').forEach((el) => {
+    el.style.display = view === VIEW_GENRE ? '' : 'none';
+  });
 
-  // 作品特有控件：run panel / 覆盖题材按钮 / project 切换在题材视图隐藏
+  // 作品特有控件：run panel / 覆盖题材按钮在题材视图隐藏
   const runPanel = $('#run-panel');
   if (runPanel) runPanel.style.display = view === VIEW_GENRE ? 'none' : '';
   const extractBtn = $('#btn-extract-genre-override');
@@ -99,6 +106,9 @@ function applyViewUI(view) {
     const tab = document.querySelector(`.tab[data-tab="${name}"]`);
     if (tab) tab.style.display = view === VIEW_GENRE ? 'none' : '';
   });
+
+  // body 上打个 data-view 属性，便于未来写纯 CSS 选择器
+  document.body.dataset.view = view;
 }
 
 

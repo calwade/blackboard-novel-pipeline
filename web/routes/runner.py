@@ -43,7 +43,14 @@ def _status_path() -> Path:
 
 
 def _allowed_roots() -> tuple[Path, ...]:
-    return (config.STATE_DIR.resolve(), config.RULES_DIR.resolve())
+    # Task: 题材视图把 presets/ 作为一等公民暴露给前端
+    # （点题材库列表 → 中间 viewer 直接读 era.md / genre.yaml）。
+    # presets/ 只含题材包，没有敏感文件；允许只读访问。
+    return (
+        config.STATE_DIR.resolve(),
+        config.RULES_DIR.resolve(),
+        config.PRESETS_DIR.resolve(),
+    )
 
 
 def _write_status(obj: dict) -> None:

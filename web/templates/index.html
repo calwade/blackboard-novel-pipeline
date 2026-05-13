@@ -86,23 +86,27 @@
       </div>
 
       <!-- Genre job selector: 仅在题材视图显示 -->
-      <select id="genre-job-selector" class="run-select" style="display:none" title="选择题材任务">
+      <select id="genre-job-selector" class="run-select view-genre-only" style="display:none" title="选择题材任务">
         <option value="">加载中…</option>
       </select>
 
-      <!-- Project switcher: shows active project, click to open picker -->
-      <button id="btn-project" class="btn btn-ghost btn-project" title="切换作品 / 新建作品">
+      <!-- Project switcher: 仅作品视图可见；题材视图隐藏 -->
+      <button id="btn-project" class="btn btn-ghost btn-project view-novel-only" title="切换作品 / 新建作品">
         <span class="btn-glyph">◎</span>
         <span id="btn-project-name">未激活</span>
       </button>
-      <!-- Cross-section navigation: genres + novels library -->
-      <!-- Task #7: ◎ reserved for "active project"; genres get a distinct glyph (❖) -->
-      <a class="btn btn-ghost" href="/presets" title="题材库：建 / 补 / 审 / 从小说拆解题材包">
+
+      <!-- 题材视图专属入口：题材库 / 素材库 / 新建题材 -->
+      <a class="btn btn-ghost view-genre-only" href="/presets" title="题材库：浏览 / 删除现有 preset" style="display:none">
         <span class="btn-glyph">❖</span>题材库
       </a>
-      <a class="btn btn-ghost" href="/novels" title="素材库：上传管理小说 txt 文件">
+      <a class="btn btn-ghost view-genre-only" href="/novels" title="素材库：上传 / 管理源 txt（拆题材的输入）" style="display:none">
         <span class="btn-glyph">📚</span>素材库
       </a>
+      <a class="btn btn-primary view-genre-only" href="/presets/new" title="新建题材 · 三种方式" style="display:none">
+        <span class="btn-glyph">+</span>新建题材
+      </a>
+
       <!-- Settings (.env editor) -->
       <button id="btn-settings" class="btn btn-ghost btn-icon" title="编辑 .env — API key 与模型">
         <span class="btn-glyph">⚙</span>

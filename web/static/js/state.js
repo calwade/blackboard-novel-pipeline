@@ -157,4 +157,12 @@ export const state = {
   // 所有数据源（pollState / inspector / viewer）都按 view 分支切 URL。
   view: 'novel',
   genreJobId: null,  // 当前查看的题材 job id，仅 view='genre' 时使用
+
+  // Genre 视图左侧树的三档 tab：
+  //   'job'     = 当前选中 job 的 workspace 产物（默认）
+  //   'presets' = 题材库列表
+  //   'novels'  = 素材库列表
+  // tab 切换不影响 URL 和 pollState；仅本地渲染切换。
+  genreLeftTab: 'job',
+  genreListCache: { presets: null, novels: null },  // 列表页数据缓存
 };
