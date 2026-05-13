@@ -85,28 +85,69 @@ def split_text_into_batches(
 # ---------------------------------------------------------------
 # Phase 1: Extract
 # ---------------------------------------------------------------
-def run_extract(bb: Blackboard, source_streams: Iterable) -> None:
+def run_extract(
+    bb: Blackboard,
+    source_streams: Iterable,
+    *,
+    cancel=None,
+    on_progress=None,
+) -> None:
     """Run the Extractor over each novel source, one batch at a time.
 
     ``source_streams`` is a list of (ChapterStream, batch_size) tuples. Each
     batch's text is loaded lazily via ``stream.read_batch()`` so peak RAM
     stays bounded regardless of novel size.
+
+    ``cancel`` is an optional :class:`src.jobs.cancel.CancelToken` — its
+    ``check()`` is called at every batch boundary so web-side abort lands
+    within one batch's worth of latency (not mid-LLM-call, which can't be
+    interrupted safely).
+
+    ``on_progress`` is an optional :class:`ProgressCallback` — called once
+    per completed batch with ``sub_steps={"batch_cur": i, "batch_total": N}``.
     """
     from src.genre_extractor.agents.extractor import GenreExtractor
+    from src.genre_extractor.progress import null_progress
+    from src.jobs.cancel import NullCancelToken
+
+    if cancel is None:
+        cancel = NullCancelToken()
+    if on_progress is None:
+        on_progress = null_progress
 
     schemas.update_phase_status(bb, phase="extract", status="in_progress")
     agent = GenreExtractor()
-    global_batch_id = 0
+
+    # Pre-count total batches so progress callbacks can report X/N.
+    all_batches: list[tuple[ChapterStream, int, int]] = []
     for stream, bs in source_streams:
         total_ch = stream.total_chapters
         for start_ch, end_ch in adaptive.split_into_batches(
             total_chapters=total_ch, batch_size=bs
         ):
-            global_batch_id += 1
-            btxt = stream.read_batch(start_ch, end_ch)
-            schemas.set_in_flight(bb, agent="genre_extractor", batch_id=global_batch_id)
-            agent.run(bb, batch_id=global_batch_id, batch_text=btxt)
-            schemas.record_batch_done(bb, batch_id=global_batch_id)
+            all_batches.append((stream, start_ch, end_ch))
+    total_batches = len(all_batches)
+
+    # Initial "entering extract phase" ping so the UI can highlight the node.
+    on_progress(
+        phase="extract", phase_index=1,
+        sub_steps={"batch_cur": 0, "batch_total": total_batches},
+        progress_text=f"extract 0/{total_batches}",
+    )
+
+    global_batch_id = 0
+    for stream, start_ch, end_ch in all_batches:
+        cancel.check()
+        global_batch_id += 1
+        btxt = stream.read_batch(start_ch, end_ch)
+        schemas.set_in_flight(bb, agent="genre_extractor", batch_id=global_batch_id)
+        agent.run(bb, batch_id=global_batch_id, batch_text=btxt)
+        schemas.record_batch_done(bb, batch_id=global_batch_id)
+        on_progress(
+            phase="extract", phase_index=1,
+            sub_steps={"batch_cur": global_batch_id, "batch_total": total_batches},
+            progress_text=f"extract batch {global_batch_id}/{total_batches}",
+        )
     schemas.clear_in_flight(bb)
     schemas.update_phase_status(bb, phase="extract", status="done")
 
@@ -114,28 +155,48 @@ def run_extract(bb: Blackboard, source_streams: Iterable) -> None:
 # ---------------------------------------------------------------
 # Phase 2: Merge (3-tier)
 # ---------------------------------------------------------------
-def run_merge(bb: Blackboard) -> None:
+def run_merge(
+    bb: Blackboard,
+    *,
+    cancel=None,
+    on_progress=None,
+) -> None:
     """Three-tier merge: batch → arc → book-level latest_merged.yaml.
 
     Regimes (drives LLM call count):
       ≤ ARC_BATCH_COUNT batches    → pure concat, 0 LLM calls (short book)
       5 – 4×ARC_BATCH_COUNT batches → arc tier only, ≥2 arc_merger calls
       > 4×ARC_BATCH_COUNT batches  → arc tier + 1 book_distiller call (long book)
+
+    ``cancel`` is called between each arc merge; ``on_progress`` reports
+    ``sub_steps={"arc_cur": i, "arc_total": N}`` when the multitier path runs.
     """
     from src.genre_extractor.agents.arc_merger import ARC_BATCH_COUNT
+    from src.genre_extractor.progress import null_progress
+    from src.jobs.cancel import NullCancelToken
 
+    if cancel is None:
+        cancel = NullCancelToken()
+    if on_progress is None:
+        on_progress = null_progress
+
+    cancel.check()
     schemas.update_phase_status(bb, phase="merge", status="in_progress")
     notes = bb.list_files("extraction_notes", "batch-*.yaml")
     batch_ids = sorted(
         bid for bid in (_parse_batch_id(p.name) for p in notes) if bid is not None
     )
 
+    on_progress(phase="merge", phase_index=2, progress_text="merge started")
+
     if len(batch_ids) <= ARC_BATCH_COUNT:
         # Regime 1: pure concat, no LLM.
         _run_merge_concat(bb, notes)
     else:
         # Regime 2 & 3: arc tier (always), book distill (when arcs ≥ 4).
-        _run_merge_multitier(bb, batch_ids)
+        _run_merge_multitier(
+            bb, batch_ids, cancel=cancel, on_progress=on_progress,
+        )
 
     # Health dashboard — best-effort.
     try:
@@ -183,20 +244,40 @@ def _run_merge_concat(bb: Blackboard, notes) -> None:
     bb.write_yaml("extraction_notes/latest_merged.yaml", merged)
 
 
-def _run_merge_multitier(bb: Blackboard, batch_ids: list[int]) -> None:
+def _run_merge_multitier(
+    bb: Blackboard,
+    batch_ids: list[int],
+    *,
+    cancel=None,
+    on_progress=None,
+) -> None:
     """Long-book 3-tier merge. Assumes len(batch_ids) > ARC_BATCH_COUNT."""
     from src.genre_extractor.agents.arc_merger import (
         ARC_BATCH_COUNT, GenreArcMerger,
     )
     from src.genre_extractor.agents.book_distiller import GenreBookDistiller
+    from src.genre_extractor.progress import null_progress
+    from src.jobs.cancel import NullCancelToken
+
+    if cancel is None:
+        cancel = NullCancelToken()
+    if on_progress is None:
+        on_progress = null_progress
 
     arc_merger = GenreArcMerger()
     arc_ids: list[int] = []
 
+    total_arcs = (len(batch_ids) + ARC_BATCH_COUNT - 1) // ARC_BATCH_COUNT
     for arc_idx, start in enumerate(range(0, len(batch_ids), ARC_BATCH_COUNT), start=1):
+        cancel.check()
         group = batch_ids[start:start + ARC_BATCH_COUNT]
         arc_merger.run(bb, arc_id=arc_idx, batch_ids=group)
         arc_ids.append(arc_idx)
+        on_progress(
+            phase="merge", phase_index=2,
+            sub_steps={"arc_cur": arc_idx, "arc_total": total_arcs},
+            progress_text=f"merge arc {arc_idx}/{total_arcs}",
+        )
 
     if len(arc_ids) == 1:
         # Defensive: promote the single arc directly.
@@ -213,23 +294,48 @@ def _run_merge_multitier(bb: Blackboard, batch_ids: list[int]) -> None:
         bb.write_yaml("extraction_notes/latest_merged.yaml", arc_yaml)
         return
 
+    cancel.check()
+    on_progress(
+        phase="merge", phase_index=2,
+        progress_text="book-level distill",
+    )
     GenreBookDistiller().run(bb, arc_ids=arc_ids)
 
 
 # ---------------------------------------------------------------
 # Phase 3: Draft
 # ---------------------------------------------------------------
-def run_draft(bb: Blackboard, build_key: str) -> None:
+def run_draft(
+    bb: Blackboard,
+    build_key: str,
+    *,
+    cancel=None,
+    on_progress=None,
+) -> None:
     """Populate genre_blueprint.yaml via the GenreDrafter agent.
 
     ``build_key`` is the identifier (genre_id or project_id) used only for
     labeling the blueprint skeleton. It does NOT determine any filesystem
     path — rendering to disk is a separate concern (see
     :func:`render_files_from_blueprint`).
+
+    ``cancel`` is checked once at the start (drafter is a single LLM call and
+    can't be interrupted mid-flight safely). ``on_progress`` reports phase
+    entry; Chain-of-Density per-pass reporting is currently TODO inside the
+    drafter agent.
     """
     from src.genre_extractor.agents.drafter import GenreDrafter
+    from src.genre_extractor.progress import null_progress
+    from src.jobs.cancel import NullCancelToken
 
+    if cancel is None:
+        cancel = NullCancelToken()
+    if on_progress is None:
+        on_progress = null_progress
+
+    cancel.check()
     schemas.update_phase_status(bb, phase="draft", status="in_progress")
+    on_progress(phase="draft", phase_index=3, progress_text="draft started")
     bb.write_yaml(
         "genre_blueprint.yaml",
         schemas.make_empty_blueprint(genre_id=build_key),
