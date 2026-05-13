@@ -9,7 +9,11 @@ import pytest
 
 @pytest.fixture
 def stub_llm(monkeypatch):
-    """Patch the shared LLM client to return a canned JSON string."""
+    """Patch the shared LLM client to return a canned JSON string.
+
+    注意：这里故意用 `index` 字段模拟模型可能返回的旧字段名，
+    drafter 应当把它归一化为契约字段 `ch`。
+    """
     def fake_chat(system, user, *, agent_name, **kwargs):
         return json.dumps({
             "title": "Test Book",
@@ -32,7 +36,11 @@ def test_outline_drafter_produces_structured_outline(stub_llm):
     )
     assert out["title"] == "Test Book"
     assert len(out["chapters"]) == 2
-    assert out["chapters"][0]["index"] == 1
+    # 契约字段是 ch，不是 index（Planner/Packaging 消费 c["ch"]）
+    assert out["chapters"][0]["ch"] == 1
+    assert out["chapters"][1]["ch"] == 2
+    # 旧字段应被清理，防止下游看到两份序号
+    assert "index" not in out["chapters"][0]
     assert "beats" in out["chapters"][0]
 
 
