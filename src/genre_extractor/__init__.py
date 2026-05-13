@@ -1,8 +1,12 @@
-"""Genre Extractor — extract genre packs from source novels.
+"""Genre assets tooling — create genre presets from various sources.
 
-Two entry points (decoupled by output location):
-  - to_project:  produce era.md etc for a specific book (projects/<book-id>/)
-  - to_preset:   produce a reusable genre preset (presets/<preset-id>/)
+Entry points (v2 architecture):
+  - miners.novel_dna: 从 N 本素材小说融合创造新 preset（同框架换核心设定）
+  - miners.sensory_kit: 从作品已产章节抽 location→5感清单给 Planner 用
+  - blank_preset: 手动建空壳 preset
+  - from_description: 从一段自由描述让 LLM 造 preset（单次调用，轻量）
 
-See docs/superpowers/specs/book-centric-workflow-design.md for the full design.
+旧版（extractor→merger→drafter→validator 四段式 pipeline）已于 2026-05-14
+删除。历史详见 docs/superpowers/specs/genre-mining-v2-step1-sensory-kit.md
+和 git log commit fb8bbf7（NovelDNA 上线）。
 """

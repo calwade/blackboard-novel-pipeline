@@ -18,7 +18,40 @@ from pathlib import Path
 import yaml
 
 from src import config, llm
-from src.genre_extractor import core
+
+
+def _render_files_from_blueprint(blueprint: dict, *, out_dir: Path) -> list[Path]:
+    """Write era.md / writing-style-extra.md / iron-laws-extra.md +
+    optionally resource_schema.yaml to ``out_dir``.
+
+    Moved inline from the deleted src/genre_extractor/core.py (2026-05-14).
+    Only from_description consumes this, so it lives next to its caller.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    mapping = {
+        "era": "era.md",
+        "writing_style_extra": "writing-style-extra.md",
+        "iron_laws_extra": "iron-laws-extra.md",
+    }
+    for key, fname in mapping.items():
+        node = blueprint.get(key) or {}
+        content = node.get("content", "") if isinstance(node, dict) else ""
+        path = out_dir / fname
+        path.write_text(content, encoding="utf-8")
+        written.append(path)
+    schema = blueprint.get("resource_schema")
+    schema_path = out_dir / "resource_schema.yaml"
+    if schema:
+        schema_path.write_text(
+            yaml.safe_dump(schema, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+        written.append(schema_path)
+    elif schema_path.exists():
+        schema_path.unlink()
+    return written
 
 log = logging.getLogger(__name__)
 
@@ -177,7 +210,7 @@ def extract_from_description(
             encoding="utf-8",
         )
         blueprint = _blueprint_from_parsed(parsed)
-        core.render_files_from_blueprint(blueprint, out_dir=preset_dir)
+        _render_files_from_blueprint(blueprint, out_dir=preset_dir)
     except Exception:
         # Clean up on any write failure
         if preset_dir.exists():

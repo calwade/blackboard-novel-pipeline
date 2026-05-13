@@ -53,41 +53,34 @@ python -m src.bootstrap --new-project my-book \
 python -m src.bootstrap --project my-book
 ```
 
-## 题材提取流水线（Genre Extractor）
+## 新建 preset 的三条路径（v2 架构）
 
-除了作品流水线（每章 Planner→Generator→Evaluator→Fixer→Summarizer），系统还有一条 **题材提取流水线**（`src/genre_extractor/`）：用于从已有小说拆解出题材规范，并写入两种目标之一——直接写入某个 **作品** 目录（`--extract-genre <book-id>`，替换该书的 4 份题材文件），或写入一个新的 **preset**（`--to-preset <preset-id>`，沉淀为可复用模板）。
+除了作品流水线（每章 Planner→Generator→Evaluator→Fixer→Summarizer），系统还有一组 **preset 生成工具**（`src/genre_extractor/`）：产出 `presets/<id>/{era.md, writing-style-extra.md, iron-laws-extra.md, genre.yaml, [resource_schema.yaml]}`。新建作品时从中挑一个 preset 作起点。
+
+三条路径（Web UI `/presets/new` 或 CLI）：
 
 ```bash
-# 从已有小说拆题材 → 直接写进一本作品
-python -m src.pipeline --extract-genre my-book \
-    --sources novels/a.txt,novels/b.txt [--with-trial]
+# A. 从多本素材融合（同框架换核心设定的新世界观，推荐）
+#    CLI: 直接脚本
+python -m src.genre_extractor.miners.novel_dna <preset_id> \
+    novels/a.txt novels/b.txt novels/c.txt [--seed 42] [--hint "..."]
+#    Web: POST /api/jobs kind='from-novel' target={type:preset, id:<id>}
 
-# 从已有小说拆题材 → 沉淀成新 preset（供后续新作品勾选）
-python -m src.genre_extractor --to-preset xianxia-dark-1 \
-    --sources novels/a.txt,novels/b.txt
+# B. 从一段描述生成（单次 LLM 调用，轻量快速）
+#    Web: POST /api/jobs kind='from-description' + params.description
 
-# 断点续跑单个 phase（Intent Router）
-python -m src.genre_extractor --to-preset <id> --extract-only
-python -m src.genre_extractor --to-preset <id> --merge-only
-python -m src.genre_extractor --to-preset <id> --draft-only
-python -m src.genre_extractor --to-preset <id> --validate-only
+# C. 手动空壳（作者手写）
+#    Web: POST /api/jobs kind='blank'
 ```
 
-机制要点：
-- 核心模块：`src/genre_extractor/core.py`（主编排器）、`to_preset.py`（写入 preset 目录）、`to_project.py`（写入作品目录）、`pipeline.py`（phase pipeline）、`adaptive.py`（自适应窗口）、`chapter_stream.py`（流式章节索引）
-- 复用 `Blackboard` / `BaseAgent`（位于 `src/core/`）
-- 滑动窗口 25 章/批，三档自适应（≤50:10 / 51-600:25 / >600:40）
-- `.build/`（构建期工作目录，进 `.gitignore`）：`build_status.yaml` + `extraction_notes/batch-NNN.yaml` + `genre_blueprint.yaml` + `genre_issues.jsonl` + `extraction_tally.md`
-- Extractor **两步法**（DSPy TwoStepAdapter 思路）：Step 1 自由笔记（temp 0.3）→ Step 2 verbatim 提取为严格 YAML（temp 0.0），字段对齐最终 4 份题材文件，带 `evidence_chapters` / `confidence`
-- Drafter **Chain-of-Density 3-pass 迭代**（可选开启）
-- **三级合并**：batch (25 章) → arc (每 4 批) → book distill（全量），大小说不吃满上下文
-- Validator 扇出 **并行 3 Auditor**（FactChecker / ConsistencyGuard / StyleGuard）+ Tier-1 正则 deny 短语扫描
-- Validator→Fixer **≤2 次 retry loop** + ship_with_debt，对齐作品流水线
-- ChapterStream 对 >5MB 大文件走流式索引 + 自动 GB18030/Big5/Shift-JIS 等编码检测转 UTF-8
-- `--with-trial` 真跑 3 章试验书（复用 bootstrap_project 的 scratch 隔离）
+**路径 A（NovelDNA）两阶段工作流**：
+- **Stage 1**：每本小说按均匀分布随机抽 7 个 5 章窗口，**并发**分析每窗口的"情节起承转合 / 语言风格 / 信息释放 / 人物操作 / 爽点配方 / 钩子配方"，再 1 次综合调用压缩为 DNA 卡（Markdown）。产物：`presets/<preset_id>/dna_cards/<book>.md`
+- **Stage 2**：读所有 DNA 卡，识别共性戏剧框架，**但核心设定完全原创**（LLM 被严格约束不得使用源小说的专属名词）。产物：完整 preset 目录 + `iron-laws-extra.md` 第 1 条列出源小说专属名词作为硬禁止。
+
+历史（2026-05-14 删除）：v1 架构曾有 `extractor→merger→drafter→validator` 四段式 pipeline（`core.py` / `pipeline.py` / `to_preset.py` / `to_project.py` / `agents/` / `auditors/`），实测下游召回率为 0（Oracle 4 轮评审），已全量删除并以 NovelDNA 替代。
 
 规范文档：
-- 设计：[`docs/superpowers/specs/book-centric-workflow-design.md`](docs/superpowers/specs/book-centric-workflow-design.md)
+- NovelDNA 设计：[`docs/superpowers/specs/genre-mining-v2-step1-sensory-kit.md`](docs/superpowers/specs/genre-mining-v2-step1-sensory-kit.md)（Step 1 SensoryKitMiner + 后续 miner 规划）
 
 ## 架构 1 行说明
 
@@ -298,4 +291,4 @@ python -m src.genre_extractor.miners.novel_dna <preset_id> novels/a.txt novels/b
 - **Evaluator 看似通过但 verdict 全空** → 检查 `_skeleton_detected` 字段。Evaluator 返回 JSON 示例骨架时会被 detector 识别并触发 retry，不会静默通过。
 - **生成质量变差** → 打开 Web UI 的 Prompt Inspector，对比相邻两次 Generator 的 system prompt 和 inputs_read。任何两次调用的上下文必须各自独立、不应出现跨章累积。
 - **切换作品但 Agent 仍然用老题材口吻** → 重新 `python -m src.bootstrap --project <id>`。检查 `projects/.active` 文件的内容 + `state/setting.yaml` 中 `id` 字段是否为期望的作品。
-- **想换题材起点** → preset 拷贝一次就解耦了；要替换某本书的题材，直接改 `projects/<id>/` 目录下的 4 份题材文件（或跑 `--extract-genre` 从新样本重新拆），不需要动 preset。
+- **想换题材起点** → preset 拷贝一次就解耦了；要替换某本书的题材，直接改 `projects/<id>/` 目录下的 4 份题材文件（或用 NovelDNA 新建一个 preset 再重新 bootstrap 作品），不需要动老 preset。

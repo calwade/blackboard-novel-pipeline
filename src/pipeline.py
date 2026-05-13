@@ -369,28 +369,6 @@ def run_packaging(bb: Blackboard) -> dict:
         }
 
 
-def run_extract_genre(
-    book_id: str,
-    *,
-    sources: list[str],
-    with_trial: bool = False,
-) -> dict:
-    """Extract a genre pack into a book's dir, then re-bootstrap if it's active.
-
-    Delegates to src.genre_extractor.to_project.extract_to_project. If
-    ``book_id`` is the currently active project, re-run bootstrap so that
-    ``state/`` picks up the freshly-extracted genre files (preserving chapter
-    progress).
-    """
-    from src.genre_extractor import to_project as to_project_mod
-    result = to_project_mod.extract_to_project(
-        book_id, sources=sources, with_trial=with_trial,
-    )
-    if config.get_active_project_id() == book_id:
-        bootstrap_project(book_id, preserve_progress=True)
-    return result
-
-
 def run_draft_outline(book_id: str, *, synopsis: str) -> dict:
     """Regenerate outline.json from a synopsis. Also re-bootstraps if active."""
     import yaml as _yaml
@@ -457,14 +435,7 @@ def _build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--fix-only", type=int, metavar="N", dest="fix_only",
                      help="(Intent: fix) run Fixer once from existing verdict.json")
     grp.add_argument("--bookkeeping-only", type=int, metavar="N", dest="bookkeeping_only",
-                     help="(Intent: bookkeeping) refresh summary + status card + hooks + ledger from existing prose")
-    # Phase 2 Task 2.5: extract a genre pack directly into a book's own dir
-    grp.add_argument("--extract-genre", type=str, metavar="BOOK_ID", dest="extract_genre",
-                     help="extract a genre pack into projects/<BOOK_ID>/ (requires --sources)")
-    parser.add_argument("--sources", type=str, default="",
-                        help="comma-separated source novel paths (used with --extract-genre)")
-    parser.add_argument("--with-trial", action="store_true", dest="with_trial",
-                        help="run a 3-chapter trial after extraction (used with --extract-genre)")
+                      help="(Intent: bookkeeping) refresh summary + status card + hooks + ledger from existing prose")
     return parser
 
 
@@ -473,16 +444,6 @@ def main():
     args = parser.parse_args()
 
     bb = Blackboard()
-
-    if args.extract_genre:
-        if not args.sources.strip():
-            parser.error("--extract-genre requires --sources <path1,path2,...>")
-        sources = [s.strip() for s in args.sources.split(",") if s.strip()]
-        result = run_extract_genre(
-            args.extract_genre, sources=sources, with_trial=args.with_trial,
-        )
-        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
-        return
 
     if args.packaging:
         result = run_packaging(bb)

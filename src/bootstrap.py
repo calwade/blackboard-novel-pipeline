@@ -214,7 +214,6 @@ def create_project(
     protagonist_name: str,
     chapter_count_target: int,
     from_preset: Optional[str] = None,
-    from_extract: Optional[dict] = None,
     blank_genre: bool = False,
     outline_synopsis: Optional[str] = None,
     blank_outline: bool = False,
@@ -226,8 +225,6 @@ def create_project(
 
     Genre starter flags are mutually exclusive (pick exactly one):
       - from_preset=<id>: copy 3-4 genre files verbatim from presets/<id>/
-      - from_extract={"sources": [...], "with_trial": bool}: run GenreExtractor
-        to mine genre files from existing novels
       - blank_genre=True: write TODO stubs
 
     Outline starter flags are mutually exclusive:
@@ -237,14 +234,18 @@ def create_project(
     Characters starter flags are mutually exclusive:
       - characters_brief=<str>: run CharactersDrafter to draft characters.yaml
       - blank_characters=True: write empty characters.yaml shell
+
+    Genre from-novel (fusion) is NOT a flag here anymore — submit
+    `POST /api/jobs {kind:"from-novel", target:{type:"preset", id:...}}`
+    to generate a preset first, then create a project from_preset=<that id>.
     """
     _validate_id("project", project_id)
 
-    genre_choices = [bool(from_preset), bool(from_extract), bool(blank_genre)]
+    genre_choices = [bool(from_preset), bool(blank_genre)]
     if sum(genre_choices) != 1:
         raise ValueError(
             "Genre starter flags are mutually exclusive; pick exactly one of "
-            "from_preset / from_extract / blank_genre"
+            "from_preset / blank_genre"
         )
 
     # --- Outline starter: 2-way mutex ---
@@ -306,29 +307,19 @@ def create_project(
                 preset_dir / "era_sensory_kit.yaml",
                 project_dir / "era_sensory_kit.yaml",
             )
-    elif blank_genre or from_extract:
-        # Lay down blank stubs first (so project is structurally complete even
-        # if extraction fails or is partial). For from_extract, extract_to_project
-        # will overwrite these below.
+    elif blank_genre:
+        # Blank stubs so the project is structurally complete.
         (project_dir / "era.md").write_text(
-            f"# Era for {display_name}\n\n(TODO: fill in the era pack.)\n" if blank_genre else "",
+            f"# Era for {display_name}\n\n(TODO: fill in the era pack.)\n",
             encoding="utf-8",
         )
         (project_dir / "writing-style-extra.md").write_text(
-            "# Writing style\n\n(TODO.)\n" if blank_genre else "",
+            "# Writing style\n\n(TODO.)\n",
             encoding="utf-8",
         )
         (project_dir / "iron-laws-extra.md").write_text(
-            "# Iron laws\n\n(TODO.)\n" if blank_genre else "",
+            "# Iron laws\n\n(TODO.)\n",
             encoding="utf-8",
-        )
-
-    if from_extract:
-        from src.genre_extractor import to_project as to_project_mod
-        to_project_mod.extract_to_project(
-            project_id,
-            sources=from_extract.get("sources", []),
-            with_trial=bool(from_extract.get("with_trial", False)),
         )
 
     # outline.json — drafter or blank

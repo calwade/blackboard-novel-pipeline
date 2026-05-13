@@ -125,6 +125,13 @@ def test_no_stale_genre_pipeline_references():
 
 
 def test_genre_extractor_imports_ok():
+    """v2 架构：老 pipeline 已删，只剩 miners/ + blank/from_description."""
     import importlib
-    for mod in ("src.genre_extractor", "src.genre_extractor.pipeline"):
+    for mod in (
+        "src.genre_extractor",
+        "src.genre_extractor.miners.novel_dna",
+        "src.genre_extractor.miners.sensory_kit",
+        "src.genre_extractor.blank_preset",
+        "src.genre_extractor.from_description",
+    ):
         importlib.import_module(mod)

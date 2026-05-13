@@ -39,12 +39,21 @@ document.getElementById("form-from-novel")?.addEventListener("submit", (e) => {
   const f = e.currentTarget;
   const pid = f.elements["preset_id"].value.trim();
   const displayName = f.elements["display_name"].value.trim();
+  const hint = (f.elements["hint"]?.value || "").trim();
   const sources = [...f.querySelectorAll('input[name="sources"]:checked')].map((x) => x.value);
   if (sources.length === 0) {
-    alert("请至少勾选一份原著素材");
+    alert("请至少勾选 2 本原著素材（NovelDNA 融合至少需要 2 本）");
     return;
   }
-  submitJob("from-novel", { type: "preset", id: pid }, { display_name: displayName }, sources);
+  if (sources.length < 2) {
+    if (!confirm("只选 1 本？NovelDNA 建议选 2-4 本做交叉融合，单本也可继续。")) return;
+  }
+  submitJob(
+    "from-novel",
+    { type: "preset", id: pid },
+    { display_name: displayName, hint },
+    sources,
+  );
 });
 
 document.getElementById("form-from-description")?.addEventListener("submit", (e) => {

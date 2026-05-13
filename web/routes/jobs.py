@@ -7,6 +7,7 @@ from typing import Any
 
 from flask import Blueprint, abort, jsonify, render_template, request
 
+from src import config
 from src.jobs import (
     GenrePipelineAborted,
     NullCancelToken,
@@ -41,14 +42,13 @@ def create_job():
     sources = body.get("sources") or []
     params = body.get("params") or {}
 
-    if kind not in ("from-novel", "from-description", "blank", "extract-to-project"):
+    if kind not in ("from-novel", "from-description", "blank"):
         return jsonify({"error": "unknown kind"}), 400
-    if not isinstance(target, dict) or target.get("type") not in ("preset", "project"):
-        return jsonify({"error": "bad target"}), 400
+    if not isinstance(target, dict) or target.get("type") != "preset":
+        return jsonify({"error": "bad target: must be {type:'preset', id:...}"}), 400
 
     # Pre-flight: 对于新建 preset 的 kind，如果 target 目录已经存在，
     # 直接 409 拒绝，避免用户提交后才在详情页看到 "Preset already exists"。
-    # （extract-to-project 是覆盖语义，允许目录已存在。）
     from src import config
     if kind in ("from-novel", "from-description", "blank"):
         preset_dir = config.PRESETS_DIR / target["id"]
@@ -132,22 +132,18 @@ def job_log(job_id):
 def _genre_job_workspace(job_id: str) -> tuple[dict, Path]:
     """Resolve a job's on-disk workspace (preset dir + .build/).
 
-    Returns (job_record, workspace_path). For `from-novel`/`blank`/
-    `from-description`, workspace = presets/<id>/; for
-    `extract-to-project`, workspace = projects/<id>/state/.extract_build/.
+    所有 job 当前都产 preset（from-novel 走 NovelDNA / from-description /
+    blank 都是产 preset），workspace 总是 presets/<target.id>/。
     Raises 404 if job not found.
     """
-    from src import config
-
     rec = get_store().get(job_id)
     if rec is None:
         abort(404, "job not found")
     target = rec["target"]
-    if target["type"] == "preset":
-        return rec, Path(config.PRESETS_DIR) / target["id"]
-    # project: 题材产物落在 state/.extract_build/，但最终 4 份文件回落
-    # projects/<id>/（不是 state/，因 to_project 输出到 book_dir）
-    return rec, Path(config.PROJECTS_DIR) / target["id"]
+    # 当前系统只支持 preset target；保留 project 分支是历史残留，统一按 preset 处理。
+    if target["type"] != "preset":
+        abort(400, f"unsupported target type: {target['type']}")
+    return rec, Path(config.PRESETS_DIR) / target["id"]
 
 
 @bp.get("/api/genre-state")
@@ -168,11 +164,8 @@ def api_genre_state():
 
     rec, workspace = _genre_job_workspace(job_id)
     build_dir = workspace / ".build"
-    if rec["target"]["type"] == "project":
-        # 作品侧 build 目录路径不同
-        build_dir = workspace / "state" / ".extract_build"
 
-    # 最终产物（preset 侧在 workspace；project 侧在 workspace 根）
+    # 最终产物
     final_files = ("era.md", "writing-style-extra.md", "iron-laws-extra.md",
                    "resource_schema.yaml", "genre.yaml")
     files: list[dict] = []
@@ -252,8 +245,6 @@ def api_genre_file():
 
     rec, workspace = _genre_job_workspace(job_id)
     build_dir = workspace / ".build"
-    if rec["target"]["type"] == "project":
-        build_dir = workspace / "state" / ".extract_build"
 
     # 两个合法根：workspace（最终产物）、build_dir（过程产物）
     candidates = []
@@ -378,10 +369,9 @@ def page_jobs_detail(job_id):
 def _build_label(kind: str, target: dict) -> str:
     tid = target["id"]
     mapping = {
-        "from-novel": f"素材库拆题材 → {tid}",
+        "from-novel": f"素材库融合题材 → {tid}",
         "from-description": f"从描述生成题材 → {tid}",
         "blank": f"空壳题材 → {tid}",
-        "extract-to-project": f"覆盖作品题材 → {tid}",
     }
     return mapping.get(kind, kind)
 
@@ -459,22 +449,56 @@ def _dispatch(rec: dict, *, cancel, on_progress, logger) -> None:
             on_progress=on_progress,
         )
     elif kind == "from-novel":
-        from src.genre_extractor.to_preset import extract_to_preset
-        extract_to_preset(
-            target["id"],
-            sources=sources,
-            with_trial=bool(params.get("with_trial", False)),
-            cancel=cancel,
-            on_progress=on_progress,
+        # from-novel = NovelDNA Synthesizer：读多本源小说，Stage 1 分析每本
+        # 得到 DNA 卡，Stage 2 同框架换核心设定产出新 preset。
+        # 产物：presets/<target.id>/
+        from src.genre_extractor.miners.novel_dna import (
+            mine_book_dna, _synthesize_preset, _write_preset,
         )
-    elif kind == "extract-to-project":
-        from src.genre_extractor.to_project import extract_to_project
-        extract_to_project(
-            target["id"],
-            sources=sources,
-            with_trial=bool(params.get("with_trial", False)),
-            cancel=cancel,
-            on_progress=on_progress,
+        from pathlib import Path as _Path
+
+        # sources 为相对仓库根的 novels/*.txt 路径列表
+        source_paths = [_Path(s) if _Path(s).is_absolute()
+                        else (config.PROJECT_ROOT / s)
+                        for s in sources]
+        for p in source_paths:
+            if not p.exists():
+                raise FileNotFoundError(f"novel not found: {p}")
+
+        # Stage 1：对每本小说并行抽 DNA 卡
+        on_progress(
+            phase="extract", phase_index=1,
+            progress_text=f"analyzing {len(source_paths)} novels (Stage 1)",
         )
+        dna_cards = []
+        for idx, p in enumerate(source_paths, 1):
+            cancel.check()
+            on_progress(
+                phase="extract", phase_index=1,
+                sub_steps={"batch_cur": idx, "batch_total": len(source_paths)},
+                progress_text=f"Stage 1 · book {idx}/{len(source_paths)}: {p.name}",
+            )
+            book = mine_book_dna(
+                p, windows_per_book=int(params.get("windows_per_book", 7)),
+                seed=params.get("seed"),
+            )
+            dna_cards.append(book)
+
+        # Stage 2：融合
+        cancel.check()
+        on_progress(
+            phase="draft", phase_index=3,
+            progress_text="Stage 2 · synthesizing cross-book preset",
+        )
+        synth = _synthesize_preset(
+            target["id"], dna_cards, hint=params.get("hint", ""),
+        )
+
+        # 写盘
+        on_progress(
+            phase="validate", phase_index=4,
+            progress_text="writing preset files",
+        )
+        _write_preset(target["id"], synth, source_paths, dna_cards)
     else:
         raise ValueError(f"unknown kind: {kind}")

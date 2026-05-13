@@ -39,22 +39,6 @@ def test_builtin_project_yaml_has_source_preset(book_id: str):
     assert data.get("source_preset") is not None
 
 
-def test_cli_pipeline_help_mentions_extract_genre():
-    result = subprocess.run(
-        [sys.executable, "-m", "src.pipeline", "--help"],
-        cwd=REPO, capture_output=True, text=True,
-    )
-    assert "--extract-genre" in result.stdout
-
-
-def test_cli_genre_extractor_help_mentions_to_preset():
-    result = subprocess.run(
-        [sys.executable, "-m", "src.genre_extractor", "--help"],
-        cwd=REPO, capture_output=True, text=True,
-    )
-    assert "--to-preset" in result.stdout
-
-
 def test_no_references_to_genre_pipeline_outside_history():
     """src.genre_pipeline must not appear anywhere except CHANGELOG and docs/history/
     and docs/superpowers/plans/ (meta-plan references)."""

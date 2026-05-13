@@ -117,14 +117,14 @@ def api_project_new():
     pid = body["id"]
 
     # Reject the legacy ``from_extract`` async payload with a clear pointer
-    # to the new flow, rather than silently ignoring it.
+    # to the new flow (NovelDNA 先造 preset → create_project(from_preset=)).
     if body.get("from_extract") and body["from_extract"].get("sources"):
         return jsonify({
             "ok": False,
             "reason": (
-                "from_extract is no longer accepted on /api/projects/new. "
-                "Create the skeleton with blank_genre=true, then submit "
-                "kind='extract-to-project' to POST /api/jobs."
+                "from_extract 已不再接受。请先用 POST /api/jobs "
+                "kind='from-novel' 从多本素材小说生成一个 preset，"
+                "再通过 from_preset 新建作品。"
             ),
         }), 400
 

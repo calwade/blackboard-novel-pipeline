@@ -20,12 +20,12 @@
 
 <div class="preset-form-wrap">
   <nav class="tabs tabs-subpage" role="tablist" aria-label="新建 preset 模式">
-    <button class="tab tab-active active" data-tab="from-novel" role="tab" aria-selected="true">从素材库拆解</button>
+    <button class="tab tab-active active" data-tab="from-novel" role="tab" aria-selected="true">从多本素材融合</button>
     <button class="tab" data-tab="from-description" role="tab" aria-selected="false">从描述生成</button>
     <button class="tab" data-tab="blank" role="tab" aria-selected="false">手动空壳</button>
   </nav>
 
-  {# Panel 1 — from-novel: kick off the genre extractor on novels/*.txt #}
+  {# Panel 1 — from-novel: NovelDNA 读多本素材小说，同框架换核心设定造新 preset #}
   <section class="preset-panel tab-panel" data-tab="from-novel" role="tabpanel">
     <form id="form-from-novel" class="onb-form" novalidate>
       <div class="form-field">
@@ -34,7 +34,7 @@
           <span class="form-hint">小写字母 / 数字 / 连字符</span>
         </label>
         <input type="text" id="fn-id" name="preset_id" class="form-input form-input-mono" required
-               placeholder="e.g. wuxia-jianghu"
+               placeholder="e.g. fusion-cyberpunk"
                pattern="[a-z0-9][a-z0-9-]*" />
       </div>
       <div class="form-field">
@@ -43,8 +43,8 @@
       </div>
       <div class="form-field">
         <label class="form-label">
-          选择原著源文件
-          <span class="form-hint">从 /novels 里勾选用于拆解的样本</span>
+          选择 2-4 本参考小说 <span class="form-required">*</span>
+          <span class="form-hint">NovelDNA 会吸收它们的戏剧结构+写作风格，但<strong>核心设定完全原创</strong>（不会直接抄袭）</span>
         </label>
         <div class="preset-picker">
           <div class="preset-picker-head">
@@ -58,10 +58,17 @@
           </div>
         </div>
       </div>
+      <div class="form-field form-field-optional">
+        <label class="form-label" for="fn-hint">
+          融合倾向 <span class="form-hint">可选 · 给 LLM 的额外方向提示</span>
+        </label>
+        <input type="text" id="fn-hint" name="hint" class="form-input"
+               placeholder="例：希望是都市奇幻不要末世 / 主角女性 / 冷硬风格" />
+      </div>
       <div class="form-actions">
         <div class="form-error" id="fn-error" hidden></div>
         <button type="submit" class="btn btn-primary" id="fn-submit">
-          <span class="btn-glyph">⎇</span><span id="fn-submit-label">启动拆解</span>
+          <span class="btn-glyph">⎇</span><span id="fn-submit-label">启动融合（~5-8 分钟）</span>
         </button>
       </div>
     </form>
