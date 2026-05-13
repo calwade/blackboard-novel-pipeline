@@ -261,6 +261,71 @@ def api_preset_new_from_novel():
     return jsonify({"ok": True, "preset_id": pid, "state": "running"}), 202
 
 
+# ---- New blank preset (sync) ----
+
+@app.post("/api/presets/new-blank")
+def api_preset_new_blank():
+    body = request.get_json(silent=True) or {}
+    pid = (body.get("id") or "").strip()
+    display_name = (body.get("display_name") or "").strip()
+    tone = body.get("tone") or ""
+    if not pid:
+        return jsonify({"ok": False, "reason": "id required"}), 400
+    if not display_name:
+        return jsonify({"ok": False, "reason": "display_name required"}), 400
+    try:
+        from src.genre_extractor.blank_preset import create_blank_preset
+        create_blank_preset(pid, display_name=display_name, tone=tone)
+    except ValueError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 400
+    except FileExistsError as e:
+        return jsonify({"ok": False, "reason": str(e)}), 409
+    return jsonify({"ok": True, "preset_id": pid})
+
+
+# ---- New preset from description (async) ----
+
+@app.post("/api/presets/new-from-description")
+def api_preset_new_from_description():
+    body = request.get_json(silent=True) or {}
+    pid = (body.get("id") or "").strip()
+    display_name = (body.get("display_name") or "").strip()
+    tone = body.get("tone") or ""
+    description = (body.get("description") or "").strip()
+    if not pid:
+        return jsonify({"ok": False, "reason": "id required"}), 400
+    if not display_name:
+        return jsonify({"ok": False, "reason": "display_name required"}), 400
+    if not description:
+        return jsonify({"ok": False, "reason": "description required"}), 400
+    if _preset_dir(pid).exists():
+        return jsonify({"ok": False, "reason": "preset already exists"}), 409
+
+    with _PRESET_JOB_LOCK:
+        if pid in _PRESET_JOBS and _PRESET_JOBS[pid].get("state") == "running":
+            return jsonify({"ok": False, "reason": "job already running"}), 409
+        _PRESET_JOBS[pid] = {"state": "running", "error": None}
+
+    def worker():
+        try:
+            from src.genre_extractor import from_description
+            from_description.extract_from_description(
+                pid,
+                display_name=display_name,
+                tone=tone,
+                description=description,
+            )
+            with _PRESET_JOB_LOCK:
+                _PRESET_JOBS[pid] = {"state": "done", "error": None}
+        except Exception as e:
+            with _PRESET_JOB_LOCK:
+                _PRESET_JOBS[pid] = {"state": "failed", "error": str(e)}
+
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    return jsonify({"ok": True, "preset_id": pid, "state": "running"}), 202
+
+
 @app.get("/api/presets/<pid>/status")
 def api_preset_status(pid: str):
     """Poll the background extraction job. Unknown pid → state='unknown'.
