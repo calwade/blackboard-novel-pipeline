@@ -161,7 +161,7 @@ python -m src.genre_extractor --to-preset <id> --validate-only
 |---|---|---|---|---|
 | Planner | outline + 最近 2 summary + setting.yaml + **current_status_card.md** + **pending_hooks.md** | chNNN.plan.json | 0.4 | 责编视角，输出严格 JSON；必读状态卡+伏笔池作为当前权威 |
 | Generator | plan + characters + setting.yaml + era + writing-style（core + extra） | chNNN.md (~3000字) | 0.85 | Show-Don't-Tell，禁 AI 味 |
-| Evaluator | chNNN.md + 18-landmines + 24-iron-laws（core + extra）+ characters + timeline | verdict.json + issues.jsonl | 0.0 | 对抗人设，默认拒稿，JSON rubric + skeleton detector |
+| Evaluator | chNNN.md + 18-landmines + 24-iron-laws（core + extra）+ characters + timeline + **current_status_card.md** + **pending_hooks.md**（两者可选，缺失时跳过） | verdict.json + issues.jsonl | 0.0 | 对抗人设，默认拒稿，JSON rubric + skeleton detector；交叉验证"反派信息越界"与伏笔回收一致性 |
 | Fixer | chNNN.md + verdict.top_3_fixes + writing-style（core + extra） | 覆写 chNNN.md | 0.5 | 只修不重写 |
 | Summarizer | chNNN.md **（不读 plan/issues，防 framing 泄漏）** | summaries/chNNN.md | 0.2 | 客观白描 |
 | **StatusCardUpdater** | chNNN.md + 上一版 current_status_card.md + characters.yaml + setting.yaml | **current_status_card.md**（覆盖式） | 0.2 | Lesson 3：当前时间点唯一快照；读正文，不读 plan/verdict/issues |
