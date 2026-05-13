@@ -16,6 +16,14 @@ export function renderPills() {
   const s = state.snapshot;
   const st = state.status;
   if (!s) return;
+
+  // Genre view: pills 显示 job 元信息 + 计数
+  if (state.view === 'genre') {
+    renderGenrePills(s);
+    renderJobsPill();
+    return;
+  }
+
   const prog = s.progress || {};
   const curr = prog.current_chapter ?? 0;
 
@@ -75,6 +83,49 @@ export function renderPills() {
   // Fire-and-forget: the pill hides itself on error, so a missing /api/jobs
   // endpoint (e.g. during local dev) never breaks the rest of the top bar.
   renderJobsPill();
+}
+
+
+// Genre view 下的 pills 显示：job 状态 / batches / arcs / issues
+function renderGenrePills(s) {
+  const job = s.job || {};
+  const counters = s.counters || {};
+  const sub = job.sub_steps || {};
+
+  // 复用 4 个 pill 的文本，但语义切换：章节→批次，技术债→arcs，LLM 调用→issues
+  // pill-chapter 标签还叫"章节"不好看，直接改文字（通过 parentElement.querySelector）
+  const chapterPill = $('#pill-chapter').parentElement;
+  chapterPill.querySelector('.pill-label').textContent = '阶段';
+  const phaseLabel = {
+    extract: 'extract', merge: 'merge', draft: 'draft', validate: 'validate',
+  }[job.phase] || '—';
+  let progressText = phaseLabel;
+  if (sub.batch_total) progressText += ` · ${sub.batch_cur || 0}/${sub.batch_total}`;
+  else if (sub.arc_total) progressText += ` · arc ${sub.arc_cur || 0}/${sub.arc_total}`;
+  $('#pill-chapter').textContent = progressText;
+
+  const runPill = $('#pill-running').parentElement;
+  runPill.querySelector('.pill-label').textContent = '状态';
+  $('#pill-running').textContent = {
+    running: '运行中', aborting: '中止中', done: '已完成',
+    failed: '失败', aborted: '已中止', interrupted: '已中断',
+  }[job.state] || job.state || '—';
+  runPill.classList.toggle('pill-running', job.state === 'running');
+
+  const debtPill = $('#pill-debt').parentElement;
+  debtPill.querySelector('.pill-label').textContent = 'issues';
+  $('#pill-debt').textContent = counters.issues || 0;
+  debtPill.classList.toggle('pill-debt-hot', (counters.issues || 0) > 0);
+
+  const callsPill = $('#pill-calls').parentElement;
+  callsPill.querySelector('.pill-label').textContent = '批次';
+  $('#pill-calls').textContent = counters.batches_done || 0;
+
+  // 隐藏 bookkeeping / debt tab badge（题材视图无章节 bookkeeping）
+  const tabBookkeeping = $('#tab-bookkeeping-badge');
+  if (tabBookkeeping) tabBookkeeping.textContent = '';
+  const tabDebt = $('#tab-debt-count');
+  if (tabDebt) tabDebt.textContent = '';
 }
 
 // Top-bar pill showing count of running genre-extract jobs.

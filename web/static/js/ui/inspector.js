@@ -11,7 +11,11 @@ import { setRightTab } from './tabs.js';
 
 export async function refreshPrompts() {
   try {
-    const arr = await api('/api/prompts?limit=80');
+    let url = '/api/prompts?limit=80';
+    if (state.view === 'genre' && state.genreJobId) {
+      url = '/api/genre-prompts?job=' + encodeURIComponent(state.genreJobId) + '&limit=80';
+    }
+    const arr = await api(url);
     state.prompts = arr;
     renderPrompts();
   } catch (_) { /* tolerate */ }

@@ -27,7 +27,14 @@ export async function openFile(path) {
   $('#viewer-meta').textContent = path;
 
   try {
-    const res = await api('/api/file?path=' + encodeURIComponent(path));
+    let url;
+    if (state.view === 'genre' && state.genreJobId) {
+      url = '/api/genre-file?job=' + encodeURIComponent(state.genreJobId)
+          + '&path=' + encodeURIComponent(path);
+    } else {
+      url = '/api/file?path=' + encodeURIComponent(path);
+    }
+    const res = await api(url);
     renderViewer(viewerRoot, res);
     $('#viewer-meta').textContent = `${path}  ·  ${fmtBytes(res.size)}`;
   } catch (e) {

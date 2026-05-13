@@ -31,6 +31,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/components/form.css') }}" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/components/card.css') }}" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/components/dialog.css') }}" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/components/view-switcher.css') }}" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/onboarding-wizard.css') }}" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/panels/bookkeeping.css') }}" />
 <link rel="stylesheet" href="{{ url_for('static', filename='css/responsive.css') }}" />
@@ -74,6 +75,21 @@
     <div class="topbar-spacer" aria-hidden="true"></div>
 
     <div class="actions actions-nav">
+      <!-- View switcher: 作品 (章节流水线) | 题材 (提取看板) -->
+      <div class="view-switcher" role="tablist" aria-label="视图切换">
+        <button id="view-btn-novel" class="view-btn is-active" role="tab" aria-selected="true" type="button" title="作品视图 · 章节流水线">
+          <span class="btn-glyph">📖</span>作品
+        </button>
+        <button id="view-btn-genre" class="view-btn" role="tab" aria-selected="false" type="button" title="题材视图 · 提取看板">
+          <span class="btn-glyph">❖</span>题材
+        </button>
+      </div>
+
+      <!-- Genre job selector: 仅在题材视图显示 -->
+      <select id="genre-job-selector" class="run-select" style="display:none" title="选择题材任务">
+        <option value="">加载中…</option>
+      </select>
+
       <!-- Project switcher: shows active project, click to open picker -->
       <button id="btn-project" class="btn btn-ghost btn-project" title="切换作品 / 新建作品">
         <span class="btn-glyph">◎</span>

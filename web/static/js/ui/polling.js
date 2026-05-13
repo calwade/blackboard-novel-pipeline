@@ -14,13 +14,20 @@ import { refreshPrompts } from './inspector.js';
 
 export async function pollState() {
   try {
-    state.snapshot = await api('/api/state');
+    if (state.view === 'genre' && state.genreJobId) {
+      // 题材视图：数据源换成 /api/genre-state?job=<id>
+      // 响应形状 {job, files, counters, progress} 与 /api/state 不同，
+      // 但 tree/pills 会按 view 分支处理。
+      state.snapshot = await api('/api/genre-state?job=' + encodeURIComponent(state.genreJobId));
+    } else {
+      state.snapshot = await api('/api/state');
+    }
     renderPills();
     renderTree();
     renderBrandSub();
     // If the bookkeeping tab is the current view, refresh its cards too.
     // Cheap: three tiny file reads; cards track content-hash to skip redundant DOM work.
-    if (state.activeCenterTab === 'bookkeeping') {
+    if (state.activeCenterTab === 'bookkeeping' && state.view === 'novel') {
       renderBookkeeping({ silent: true });
     }
   } catch (e) {

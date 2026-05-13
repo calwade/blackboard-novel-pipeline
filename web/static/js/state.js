@@ -151,4 +151,10 @@ export const state = {
   statusPollTimer: null,
   statePollTimer: null,
   promptsPollTimer: null,
+
+  // View mode: 'novel' (默认，作品章节流水线) | 'genre' (题材提取看板).
+  // URL 参数 ?view=genre&job=<id> 会被 main.js::init() 读进来。
+  // 所有数据源（pollState / inspector / viewer）都按 view 分支切 URL。
+  view: 'novel',
+  genreJobId: null,  // 当前查看的题材 job id，仅 view='genre' 时使用
 };
