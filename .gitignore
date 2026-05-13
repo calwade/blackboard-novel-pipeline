@@ -19,3 +19,6 @@ presets/*/.build/
 # or similar subdir patterns.
 /novels/
 !/novels/README.md
+
+# Genre jobs runtime artifacts (job metadata + logs)
+.jobs/
