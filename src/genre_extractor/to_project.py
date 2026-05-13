@@ -15,7 +15,9 @@ from src import config
 from src.blackboard import Blackboard
 from src.genre_extractor import core, schemas
 from src.genre_extractor.chapter_stream import ChapterStream
+from src.genre_extractor.progress import null_progress
 from src.genre_extractor.to_preset import _resolve_source
+from src.jobs.cancel import NullCancelToken
 
 GENRE_FILES = (
     "era.md",
@@ -24,9 +26,7 @@ GENRE_FILES = (
     "resource_schema.yaml",
 )
 
-# Phase callback signature: (phase_name, optional_progress_detail) -> None.
-# Phase names are stable strings consumed by the Web UI's phase-timeline
-# component: "extract" | "merge" | "draft" | "validate".
+# Legacy 2-arg phase callback. New code should use ``on_progress`` instead.
 PhaseCallback = Callable[[str, Optional[str]], None]
 
 
@@ -49,6 +49,8 @@ def _run_full_extraction_to_blueprint(
     sources: list,
     *,
     on_phase: Optional[PhaseCallback] = None,
+    cancel=None,
+    on_progress=None,
 ) -> dict:
     """Drive the core pipeline end-to-end; return the final blueprint dict.
 
@@ -58,19 +60,27 @@ def _run_full_extraction_to_blueprint(
     caller. They must remain alive for the whole call (they hold a
     tempfile via ``__del__`` for non-UTF-8 source novels).
 
-    Fires ``on_phase("extract" | "merge" | "draft")`` at the start of each
-    stage so the Web UI can paint a live phase-timeline.
+    Fires legacy ``on_phase("extract" | "merge" | "draft")`` AND the new
+    structured ``on_progress`` at each stage boundary.
     """
+    cancel = cancel or NullCancelToken()
+    on_progress = on_progress or null_progress
+
+    cancel.check()
     _safe_phase(on_phase, "extract")
     # core.run_extract expects (ChapterStream, batch_size) tuples.
     core.run_extract(
         bb,
         [(s, core.DEFAULT_EXTRACTION_BATCH_SIZE) for s in sources],
+        cancel=cancel,
+        on_progress=on_progress,
     )
+    cancel.check()
     _safe_phase(on_phase, "merge")
-    core.run_merge(bb)
+    core.run_merge(bb, cancel=cancel, on_progress=on_progress)
+    cancel.check()
     _safe_phase(on_phase, "draft")
-    core.run_draft(bb, build_key=str(bb.root))
+    core.run_draft(bb, build_key=str(bb.root), cancel=cancel, on_progress=on_progress)
     return bb.read_yaml("genre_blueprint.yaml") or {}
 
 
@@ -80,9 +90,17 @@ def extract_to_project(
     sources: list[str],
     with_trial: bool = False,
     on_phase: Optional[PhaseCallback] = None,
+    cancel=None,
+    on_progress=None,
 ) -> dict:
     """Extract a genre pack into this book's own directory (overwriting in place,
-    prior versions backed up)."""
+    prior versions backed up).
+
+    ``cancel`` / ``on_progress`` — see :func:`extract_to_preset` docstring.
+    """
+    cancel = cancel or NullCancelToken()
+    on_progress = on_progress or null_progress
+
     book_dir = config.PROJECTS_DIR / book_id
     if not book_dir.exists():
         raise FileNotFoundError(f"Project not found: {book_id}")
@@ -135,14 +153,19 @@ def extract_to_project(
         ),
     )
 
-    blueprint = _run_full_extraction_to_blueprint(bb, streams, on_phase=on_phase)
+    blueprint = _run_full_extraction_to_blueprint(
+        bb, streams,
+        on_phase=on_phase, cancel=cancel, on_progress=on_progress,
+    )
     core.render_files_from_blueprint(blueprint, out_dir=book_dir)
 
     # P0-2: run Validator + Fixer retry loop against the book's own genre
     # files (not PRESETS_DIR). Closes the gap where extract_to_project used
     # to bypass the Validator entirely.
     from src.genre_extractor import pipeline
+    cancel.check()
     _safe_phase(on_phase, "validate")
+    on_progress(phase="validate", phase_index=4, progress_text="validate started")
     try:
         pipeline._run_validate(
             bb,

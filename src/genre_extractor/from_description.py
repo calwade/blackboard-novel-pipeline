@@ -99,13 +99,25 @@ def extract_from_description(
     display_name: str,
     tone: str,
     description: str,
+    cancel=None,
+    on_progress=None,
 ) -> dict:
     """Generate a preset from a free-text description via a single LLM call.
+
+    ``cancel`` / ``on_progress`` are optional job-plumbing hooks. Since this
+    path is a single LLM call it can only honor cancel before the call
+    (mid-call cancel is not safe without streaming, which we don't use here).
 
     Raises:
         ValueError: invalid id / empty description / bad LLM output.
         FileExistsError: preset already exists.
     """
+    from src.genre_extractor.progress import null_progress
+    from src.jobs.cancel import NullCancelToken
+
+    cancel = cancel or NullCancelToken()
+    on_progress = on_progress or null_progress
+
     if not re.match(r"^[a-z0-9][a-z0-9-]*$", preset_id):
         raise ValueError(f"invalid preset id: {preset_id!r}")
     if not description or not description.strip():
@@ -114,6 +126,11 @@ def extract_from_description(
     preset_dir = config.PRESETS_DIR / preset_id
     if preset_dir.exists():
         raise FileExistsError(f"Preset already exists: {preset_id}")
+
+    # Phase: treat description→preset as a single "draft" phase. extract
+    # and merge don't apply (no novel sources), validate runs at the end.
+    cancel.check()
+    on_progress(phase="draft", phase_index=3, progress_text="drafting from description")
 
     # Call LLM
     user_prompt = (
@@ -130,6 +147,9 @@ def extract_from_description(
         max_tokens=4000,
         response_format="text",
     )
+
+    cancel.check()
+    on_progress(phase="validate", phase_index=4, progress_text="parsing & rendering")
 
     # Parse. If bad, abort cleanly — don't leave a half-built preset.
     try:
@@ -164,6 +184,7 @@ def extract_from_description(
             shutil.rmtree(preset_dir)
         raise
 
+    on_progress(phase="validate", phase_index=4, progress_text="done")
     return {
         "preset_id": preset_id,
         "source": "description",

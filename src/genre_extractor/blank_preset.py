@@ -55,13 +55,26 @@ def create_blank_preset(
     *,
     display_name: str,
     tone: str,
+    cancel=None,
+    on_progress=None,
 ) -> Path:
     """Create `presets/<preset_id>/` with stub files.
+
+    ``cancel`` / ``on_progress`` are optional job-plumbing hooks kept to
+    match the signatures of the other preset-creation entry points; this
+    path is synchronous and non-LLM so they mostly fire the "done" event.
 
     Raises:
         ValueError: preset_id is invalid (empty / wrong format).
         FileExistsError: preset already exists.
     """
+    from src.genre_extractor.progress import null_progress
+    from src.jobs.cancel import NullCancelToken
+
+    cancel = cancel or NullCancelToken()
+    on_progress = on_progress or null_progress
+
+    cancel.check()
     if not re.match(r"^[a-z0-9][a-z0-9-]*$", preset_id):
         raise ValueError(f"invalid preset id: {preset_id!r}")
 
@@ -90,4 +103,5 @@ def create_blank_preset(
     (preset_dir / "writing-style-extra.md").write_text(_STUB_WRITING_STYLE, encoding="utf-8")
     (preset_dir / "iron-laws-extra.md").write_text(_STUB_IRON_LAWS, encoding="utf-8")
 
+    on_progress(phase="validate", phase_index=4, progress_text="done")
     return preset_dir

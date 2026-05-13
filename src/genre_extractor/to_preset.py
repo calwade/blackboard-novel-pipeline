@@ -16,8 +16,14 @@ from src import config
 from src.blackboard import Blackboard
 from src.genre_extractor import core, schemas
 from src.genre_extractor.chapter_stream import ChapterStream
+from src.genre_extractor.progress import null_progress
+from src.jobs.cancel import NullCancelToken
 
-# See to_project.PhaseCallback for contract.
+# Legacy 2-arg phase callback: (phase_name, optional_progress_detail) -> None.
+# Kept for backwards compatibility with existing tests / CLI callers.
+# New code should use the keyword-only ``on_progress`` parameter, which
+# receives structured sub-step metadata via
+# :class:`src.genre_extractor.progress.ProgressCallback`.
 PhaseCallback = Callable[[str, Optional[str]], None]
 
 
@@ -50,6 +56,8 @@ def _run_full_extraction_to_blueprint(
     sources: list,
     *,
     on_phase: Optional[PhaseCallback] = None,
+    cancel=None,
+    on_progress=None,
 ) -> dict:
     """Drive the core pipeline end-to-end; return the final blueprint dict.
 
@@ -60,19 +68,28 @@ def _run_full_extraction_to_blueprint(
     for non-UTF-8 source novels); the caller (``extract_to_preset``) holds
     them in its own local, so they won't be GC'd mid-run.
 
-    Fires ``on_phase("extract" | "merge" | "draft")`` at each stage boundary.
+    Fires legacy ``on_phase("extract" | "merge" | "draft")`` at each stage
+    boundary AND the new structured ``on_progress`` through core.run_*.
     """
+    cancel = cancel or NullCancelToken()
+    on_progress = on_progress or null_progress
+
+    cancel.check()
     _safe_phase(on_phase, "extract")
     # core.run_extract expects an iterable of (ChapterStream, batch_size) tuples.
     # No open()/close() dance: ChapterStream manages its own tempfile in __del__.
     core.run_extract(
         bb,
         [(s, core.DEFAULT_EXTRACTION_BATCH_SIZE) for s in sources],
+        cancel=cancel,
+        on_progress=on_progress,
     )
+    cancel.check()
     _safe_phase(on_phase, "merge")
-    core.run_merge(bb)
+    core.run_merge(bb, cancel=cancel, on_progress=on_progress)
+    cancel.check()
     _safe_phase(on_phase, "draft")
-    core.run_draft(bb, build_key=str(bb.root))
+    core.run_draft(bb, build_key=str(bb.root), cancel=cancel, on_progress=on_progress)
     # Blueprint was written by run_draft into bb's genre_blueprint.yaml
     return bb.read_yaml("genre_blueprint.yaml") or {}
 
@@ -83,11 +100,22 @@ def extract_to_preset(
     sources: list[str],
     with_trial: bool = False,
     on_phase: Optional[PhaseCallback] = None,
+    cancel=None,
+    on_progress=None,
 ) -> dict:
     """Run the extraction pipeline; write preset artifacts.
 
     Refuses to overwrite an existing preset — presets are append-only.
+
+    ``cancel`` (:class:`src.jobs.cancel.CancelToken`) allows web-side abort.
+    ``on_progress`` (:class:`src.genre_extractor.progress.ProgressCallback`)
+    reports sub-step granularity (batch X/N, arc X/N, etc.).
+    Legacy ``on_phase`` is kept for tests and CLI; new code should prefer
+    ``on_progress``.
     """
+    cancel = cancel or NullCancelToken()
+    on_progress = on_progress or null_progress
+
     preset_dir = config.PRESETS_DIR / preset_id
     if preset_dir.exists():
         raise FileExistsError(f"Preset already exists: {preset_id}")
@@ -136,7 +164,10 @@ def extract_to_preset(
         ),
     )
 
-    blueprint = _run_full_extraction_to_blueprint(bb, streams, on_phase=on_phase)
+    blueprint = _run_full_extraction_to_blueprint(
+        bb, streams,
+        on_phase=on_phase, cancel=cancel, on_progress=on_progress,
+    )
     core.render_files_from_blueprint(blueprint, out_dir=preset_dir)
 
     # seed genre.yaml
@@ -162,7 +193,9 @@ def extract_to_preset(
     # default; passing it explicitly keeps intent obvious and symmetrical
     # with extract_to_project.
     from src.genre_extractor import pipeline
+    cancel.check()
     _safe_phase(on_phase, "validate")
+    on_progress(phase="validate", phase_index=4, progress_text="validate started")
     try:
         pipeline._run_validate(
             bb,
