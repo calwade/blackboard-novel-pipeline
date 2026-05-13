@@ -1,0 +1,13 @@
+id: fusion-v2
+display_name: 负债还钱系统
+tone: 市井写实风，冷幽默与生存焦虑并存，用最俗的规则讲最狠的生存故事。
+one_line_pitch: 失业青年绑定负债系统，靠催收还钱在末日都市求生。
+source: synthesized
+derived_from:
+- 地球OL
+- 末世虫潮
+- 末日生存方案供应商
+derived_from_sources:
+- 地球OL__校对版全本_作者_道三生.txt
+- 末世虫潮__校对版全本_作者_道三生.txt
+- 末日生存方案供应商.txt
