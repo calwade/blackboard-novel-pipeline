@@ -3,64 +3,52 @@
 {% block crumbs %}
 <a href="/">作品</a>
 <span class="crumb-sep">›</span>
-<a href="/presets">题材</a>
+<a href="/presets">题材库</a>
 <span class="crumb-sep">›</span>
 <span class="is-current">素材库</span>
 {% endblock %}
 
-{% block content %}
-<link rel="stylesheet" href="{{ url_for('static', filename='novels.css') }}" />
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/novels.css') }}" />
+{% endblock %}
 
-<section class="novels-hero">
-  <div class="novels-hero-mark">◎</div>
-  <div class="novels-hero-text">
-    <h1 class="novels-hero-title">素材库</h1>
-    <p class="novels-hero-sub">
-      放小说正文 · 喂给<a href="/presets">题材流水线</a>拆解。<br />
-      <em class="hero-em">只接受 UTF-8 纯文本 .txt · 单文件 ≤ 50 MB</em>
+{% block content %}
+<section class="page-head">
+  <div class="page-head-text">
+    <h1 class="page-head-title">素材库</h1>
+    <p class="page-head-lede">
+      原著样本 · 喂给<a href="/presets">题材流水线</a>拆解成 preset。
+      仅接受 <code>.txt</code> · 单文件 ≤ 50 MB · 自动转 UTF-8。
     </p>
   </div>
-  <div class="novels-hero-stats" id="novels-stats" hidden>
-    <div class="stat">
-      <div class="stat-n" id="stat-count">0</div>
-      <div class="stat-l">素材</div>
+  <div class="page-head-actions">
+    <div class="novels-stats" id="novels-stats" hidden>
+      <span class="stat"><span class="stat-n" id="stat-count">0</span><span class="stat-l">素材</span></span>
+      <span class="stat-sep">·</span>
+      <span class="stat"><span class="stat-n" id="stat-size">—</span></span>
+      <span class="stat-sep">·</span>
+      <span class="stat"><span class="stat-n" id="stat-chapters">—</span><span class="stat-l">章</span></span>
     </div>
-    <div class="stat">
-      <div class="stat-n" id="stat-size">—</div>
-      <div class="stat-l">总大小</div>
-    </div>
-    <div class="stat">
-      <div class="stat-n" id="stat-chapters">—</div>
-      <div class="stat-l">章节合计</div>
-    </div>
+    <button class="btn btn-ghost" id="btn-refresh" title="重新扫描 novels/ 目录">
+      <span class="btn-glyph">⟳</span>刷新
+    </button>
   </div>
 </section>
 
-<!-- DROPZONE -->
-<section class="novels-upload">
-  <label class="dropzone" id="dropzone" for="file-input">
-    <input id="file-input" type="file" accept=".txt,text/plain" multiple hidden />
-    <div class="dropzone-inner">
-      <div class="dropzone-icon">⇡</div>
-      <div class="dropzone-title">拖入 .txt 文件 &nbsp;或&nbsp; 点击选择</div>
-      <div class="dropzone-sub">支持多选 · 单文件 ≤ 50 MB</div>
-      <div class="dropzone-sub dropzone-sub-enc">
-        支持 UTF-8 / GB18030 / GBK / GB2312 / Big5 / Shift-JIS 等，上传时<em>自动转 UTF-8</em>
-      </div>
-    </div>
-  </label>
+<label class="dropzone" id="dropzone" for="file-input">
+  <input id="file-input" type="file" accept=".txt,text/plain" multiple hidden />
+  <div class="dropzone-icon">⇡</div>
+  <div class="dropzone-title">拖入 .txt 文件，或点击选择</div>
+  <div class="dropzone-sub">
+    支持多选 · 支持 UTF-8 / GB18030 / GBK / Big5 / Shift-JIS，<em>自动转 UTF-8</em>
+  </div>
+</label>
 
-  <!-- Per-file upload progress — only visible while something is in flight -->
-  <ul class="upload-queue" id="upload-queue"></ul>
-</section>
+<ul class="upload-queue" id="upload-queue"></ul>
 
-<!-- LIBRARY TABLE -->
-<section class="novels-section">
-  <div class="novels-section-head">
-    <h3 class="novels-section-title">现有素材</h3>
-    <button class="btn btn-ghost btn-sm" id="btn-refresh" title="重新扫描 novels/ 目录">
-      <span class="btn-glyph">⟳</span>刷新
-    </button>
+<section>
+  <div class="novels-table-head">
+    <span>现有素材</span>
   </div>
   <div class="novels-table-wrap">
     <table class="novels-table" id="novels-table">
@@ -83,10 +71,9 @@
   </div>
 </section>
 
-<!-- PREVIEW DRAWER -->
-<aside class="preview-drawer" id="preview-drawer" hidden>
+<aside class="preview-drawer" id="preview-drawer" hidden aria-label="文件预览">
   <div class="preview-head">
-    <div class="preview-title" id="preview-title">—</div>
+    <span class="preview-title" id="preview-title">—</span>
     <button class="preview-close" id="preview-close" aria-label="关闭">✕</button>
   </div>
   <div class="preview-meta" id="preview-meta"></div>

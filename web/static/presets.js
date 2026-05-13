@@ -56,7 +56,9 @@
     const t = $('#toast');
     if (!t) return;
     t.textContent = msg;
-    t.className = 'toast toast-show' + (kind ? ' toast-' + kind : '');
+    // Align with css/components/toast.css: .is-show / .is-error
+    const errKind = kind === 'err' || kind === 'error';
+    t.className = 'toast is-show' + (errKind ? ' is-error' : '');
     clearTimeout(toast._t);
     toast._t = setTimeout(() => { t.className = 'toast'; }, 3400);
   }
@@ -66,17 +68,15 @@
   // ========================================================
   async function initIndex() {
     const grid = $('#genre-grid');
-    const count = $('#genre-count');
     if (!grid) return;
     try {
       const data = await apiCall('/api/presets');
       const presets = data.presets || data.genres || [];
-      if (count) count.textContent = presets.length + ' 个题材';
       grid.innerHTML = '';
       if (!presets.length) {
         grid.appendChild(el('div', { class: 'placeholder' }, [
-          el('div', { class: 'placeholder-title', text: '还没有题材' }),
-          el('div', { class: 'placeholder-sub', text: '用下方的「从原著拆出新 preset」开始。' }),
+          el('div', { class: 'placeholder-title', text: '还没有 preset' }),
+          el('div', { class: 'placeholder-sub', html: '点击右上角 <code>+ 新建 preset</code> 开始。' }),
         ]));
         return;
       }
@@ -90,28 +90,39 @@
     }
   }
 
+  // Card uses .project-card base (card.css) + .preset-card modifier.
+  // Clicking the card navigates to detail; the footer delete button
+  // (non-builtin only) stops propagation.
   function renderGenreCard(g) {
-    const meta = [];
-    if (g.tone) meta.push(el('span', { class: 'genre-chip', text: g.tone }));
-    if (g.builtin) meta.push(el('span', { class: 'genre-chip genre-chip-amber', text: '内置' }));
-
     const title = g.display_name && g.display_name !== g.id ? g.display_name : g.id;
+    const href = '/presets/' + encodeURIComponent(g.id);
 
-    const actions = [
-      el('a', { class: 'btn', href: '/presets/' + encodeURIComponent(g.id) }, ['查看']),
+    const tags = el('div', { class: 'project-card-meta' }, [
+      g.builtin
+        ? el('span', { class: 'project-card-tag', text: '内置' })
+        : null,
+      g.tone ? el('span', { class: 'project-card-tag', text: g.tone }) : null,
+    ].filter(Boolean));
+
+    const footChildren = [
+      el('span', { class: 'preset-card-id', text: g.id }),
     ];
     if (!g.builtin) {
-      actions.push(el('button', {
-        class: 'btn btn-danger',
-        onclick: () => confirmDelete(g.id),
-      }, ['删除']));
+      footChildren.push(el('button', {
+        class: 'btn btn-icon-del',
+        title: '删除此 preset',
+        onclick: (ev) => { ev.preventDefault(); ev.stopPropagation(); confirmDelete(g.id); },
+      }, ['✕']));
     }
 
-    return el('article', { class: 'genre-card' }, [
-      el('div', { class: 'genre-card-id', text: g.id }),
-      el('h3', { class: 'genre-card-title', text: title }),
-      el('div', { class: 'genre-card-meta' }, meta),
-      el('div', { class: 'genre-card-actions' }, actions),
+    return el('a', {
+      class: 'project-card preset-card',
+      href: href,
+      style: 'text-decoration:none;',
+    }, [
+      el('div', { class: 'preset-card-title', text: title }),
+      tags,
+      el('div', { class: 'preset-card-foot' }, footChildren),
     ]);
   }
 
@@ -151,8 +162,12 @@
         $('#gd-title').textContent = meta.display_name || pid;
         const metaEl = $('#gd-meta');
         metaEl.innerHTML = '';
-        if (meta.tone) metaEl.appendChild(el('span', { class: 'genre-chip', text: meta.tone }));
-        if (meta.builtin) metaEl.appendChild(el('span', { class: 'genre-chip genre-chip-amber', text: '内置' }));
+        if (meta.builtin) {
+          metaEl.appendChild(el('span', { class: 'project-card-tag is-active', text: '内置' }));
+        }
+        if (meta.tone) {
+          metaEl.appendChild(el('span', { class: 'project-card-tag', text: meta.tone, style: 'margin-left:6px;' }));
+        }
       }
     } catch (_) { /* fall through */ }
 
@@ -163,23 +178,19 @@
       const d = await apiCall('/api/presets/' + encodeURIComponent(pid));
       filesEl.innerHTML = '';
       if (!(d.files || []).length) {
-        filesEl.appendChild(el('li', { class: 'placeholder', text: '（目录为空）' }));
+        filesEl.appendChild(el('li', { class: 'is-empty', text: '（目录为空）' }));
       } else {
         d.files.forEach(name => {
-          filesEl.appendChild(el('li', { class: 'genre-file' }, [
-            el('span', { class: 'genre-file-name', text: name }),
-          ]));
+          filesEl.appendChild(el('li', { text: name }));
         });
       }
 
       novelsEl.innerHTML = '';
       if (!(d.novels || []).length) {
-        novelsEl.appendChild(el('li', { class: 'placeholder', text: '（没有绑定的原著文件）' }));
+        novelsEl.appendChild(el('li', { class: 'is-empty', text: '（没有绑定的原著文件）' }));
       } else {
         d.novels.forEach(name => {
-          novelsEl.appendChild(el('li', { class: 'genre-file' }, [
-            el('span', { class: 'genre-file-name', text: name }),
-          ]));
+          novelsEl.appendChild(el('li', { text: name }));
         });
       }
 
@@ -194,7 +205,7 @@
       }
     } catch (e) {
       filesEl.innerHTML = '';
-      filesEl.appendChild(el('li', { class: 'placeholder', text: '加载失败: ' + e.message }));
+      filesEl.appendChild(el('li', { class: 'is-empty', text: '加载失败: ' + e.message }));
       novelsEl.innerHTML = '';
     }
   }
@@ -204,11 +215,16 @@
   // ======================================================
 
   function initNewPage() {
-    // Tab switching
-    const tabs = document.querySelectorAll('.tabs-preset-new .tab');
+    // Tab switching — relies on the shared .tab/.tab-active vocabulary
+    // from css/components/tabs.css; container class is .tabs-subpage.
+    const tabs = document.querySelectorAll('.tabs-subpage .tab');
     const panels = document.querySelectorAll('[data-panel]');
     tabs.forEach(t => t.addEventListener('click', () => {
-      tabs.forEach(x => x.classList.toggle('tab-active', x === t));
+      tabs.forEach(x => {
+        const active = x === t;
+        x.classList.toggle('tab-active', active);
+        x.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
       const active = t.dataset.tab;
       panels.forEach(p => p.hidden = p.dataset.panel !== active);
     }));
@@ -221,21 +237,44 @@
   function initFromNovelForm() {
     const form = document.getElementById('form-from-novel');
     if (!form) return;
-    // Load novels pool into picker-body
+    // Load novels pool into picker-body — rows use the .preset-picker-row
+    // shape (css/pages/presets.css). Toggle .is-checked on the row for
+    // the amber highlight.
     fetch('/api/novels').then(r => r.json()).then(data => {
       const body = document.getElementById('picker-body');
       const summary = document.getElementById('picker-summary');
       body.innerHTML = '';
       const novels = (data && data.novels) || [];
       summary.textContent = novels.length + ' 份素材';
+      if (!novels.length) {
+        const empty = document.createElement('div');
+        empty.className = 'placeholder';
+        empty.style.minHeight = '120px';
+        empty.style.padding = '24px';
+        empty.innerHTML = '<div class="placeholder-title">素材库为空</div>'
+          + '<div class="placeholder-sub">去 <a href="/novels">素材库</a> 上传 .txt</div>';
+        body.appendChild(empty);
+        return;
+      }
       for (const n of novels) {
         const lbl = document.createElement('label');
-        lbl.className = 'check-line';
-        lbl.innerHTML = `<input type="checkbox" name="source" value="${n.name}"> ${n.name}`;
+        lbl.className = 'preset-picker-row';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.name = 'source';
+        cb.value = n.name;
+        const text = document.createElement('span');
+        text.textContent = n.name;
+        lbl.appendChild(cb);
+        lbl.appendChild(text);
         body.appendChild(lbl);
       }
-      // Enable submit when >=1 checked
-      body.addEventListener('change', () => {
+      body.addEventListener('change', (ev) => {
+        // Visual state
+        if (ev.target && ev.target.name === 'source') {
+          const row = ev.target.closest('.preset-picker-row');
+          if (row) row.classList.toggle('is-checked', ev.target.checked);
+        }
         const checked = body.querySelectorAll('input[name=source]:checked').length;
         document.getElementById('fn-submit').disabled = checked === 0;
       });
@@ -378,7 +417,11 @@
     box.appendChild(timeline);
     const abortBtn = document.createElement('button');
     abortBtn.type = 'button';
-    abortBtn.className = 'btn btn-danger btn-sm';
+    // No .btn-danger/.btn-sm in main components; use default .btn + inline size.
+    abortBtn.className = 'btn';
+    abortBtn.style.padding = '4px 10px';
+    abortBtn.style.fontSize = '11px';
+    abortBtn.style.marginLeft = '10px';
     abortBtn.textContent = '⏹ 中断';
     abortBtn.setAttribute('data-phase-abort', '');
     abortBtn.hidden = true;

@@ -1,0 +1,183 @@
+/* Pages · /presets, /presets/new, /presets/<id>
+   Only preset-specific primitives. Buttons, form inputs, tabs,
+   placeholders, cards, phase-timeline inherit from components. */
+
+body.subpage { overflow: auto; height: auto; min-height: 100vh; }
+
+.subpage-main {
+  position: relative; z-index: 1;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 22px 28px 72px;
+}
+
+.subpage-crumbs {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-soft);
+  letter-spacing: 0.02em;
+}
+.subpage-crumbs a { color: var(--text-dim); text-decoration: none; transition: color 0.12s; }
+.subpage-crumbs a:hover { color: var(--amber); }
+.subpage-crumbs .is-current { color: var(--text); }
+.subpage-crumbs .crumb-sep { color: var(--text-soft); opacity: 0.45; }
+
+.brand-link { color: inherit; text-decoration: none; }
+.brand-link:hover .brand-title { color: var(--amber); }
+
+/* Page head: small Fraunces title + lede + right-aligned actions. */
+.page-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 20px;
+  padding: 6px 2px 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.page-head-text { min-width: 0; }
+.page-head-title {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 22px;
+  letter-spacing: -0.005em;
+  margin: 0 0 4px;
+  color: var(--text); line-height: 1.2;
+}
+.page-head-lede {
+  font-size: 12.5px; color: var(--text-soft);
+  margin: 0; line-height: 1.55;
+}
+.page-head-lede code {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--cyan); background: var(--ink-2);
+  padding: 1px 5px; border-radius: 3px;
+}
+.page-head-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* /presets grid — specialised .project-card. */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.preset-card { gap: 10px; }
+.preset-card-title {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: 16px;
+  line-height: 1.3; color: var(--text);
+  letter-spacing: -0.005em;
+}
+.preset-card-id {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-soft); word-break: break-all;
+}
+.preset-card-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; margin-top: auto;
+  padding-top: 10px; border-top: 1px solid var(--line-soft);
+}
+.preset-card-foot .btn-icon-del {
+  padding: 3px 8px; font-size: 11px;
+  opacity: 0; transition: opacity 0.15s;
+  color: var(--text-soft);
+}
+.preset-card:hover .btn-icon-del { opacity: 1; }
+.preset-card-foot .btn-icon-del:hover {
+  color: var(--red-soft);
+  border-color: rgba(248, 81, 73, 0.35);
+}
+
+/* /presets/new — tab panel bodies (tabs themselves reuse .tabs/.tab). */
+.preset-form-wrap { max-width: 720px; }
+.preset-panel {
+  padding: 22px 22px 20px;
+  background: var(--ink-2);
+  border: 1px solid var(--line); border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.preset-panel[hidden] { display: none; }
+.tabs-subpage { padding: 0; background: transparent; max-width: 720px; }
+.tabs-subpage .tab { padding: 10px 16px; }
+
+/* Novel picker — scrollable checkbox list. */
+.preset-picker {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--ink); overflow: hidden;
+}
+.preset-picker-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 12px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-soft);
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.preset-picker-body { max-height: 300px; overflow-y: auto; padding: 4px; }
+.preset-picker-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background 0.12s;
+  font-family: var(--font-mono); font-size: 12px; color: var(--text);
+}
+.preset-picker-row:hover { background: var(--panel); }
+.preset-picker-row input { accent-color: var(--amber); margin: 0; }
+.preset-picker-row.is-checked { background: rgba(255, 180, 84, 0.06); color: var(--amber); }
+
+.field-check {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-dim); cursor: pointer;
+}
+.field-check input { accent-color: var(--amber); margin: 0; }
+
+/* Progress box while a preset extraction job runs. */
+.preset-progress {
+  max-width: 720px;
+  margin-top: 18px; padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--amber);
+  border-radius: var(--radius);
+}
+.preset-progress[hidden] { display: none; }
+.preset-progress-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; margin-bottom: 12px;
+  font-family: var(--font-mono); font-size: 12px;
+}
+.preset-progress-head strong { color: var(--amber); font-weight: 600; }
+.preset-progress-head span { color: var(--text-soft); font-size: 11px; }
+
+/* /presets/<id> detail. */
+.preset-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 820px) { .preset-detail-grid { grid-template-columns: 1fr; } }
+.preset-card-block {
+  display: flex; flex-direction: column;
+  background: var(--ink-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.preset-card-block-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--panel-2);
+  font-family: var(--font-mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.preset-file-list {
+  list-style: none; padding: 6px; margin: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.preset-file-list li {
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--text); transition: background 0.1s;
+}
+.preset-file-list li:hover { background: var(--panel); }
+.preset-file-list li.is-empty {
+  color: var(--text-soft); font-style: italic;
+  padding: 18px 10px; text-align: center;
+}

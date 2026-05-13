@@ -1,113 +1,141 @@
 {% extends "presets/_base.html" %}
 {% block title %}新建 preset · Novelforge{% endblock %}
+{% block crumbs %}
+<a href="/">作品</a>
+<span class="crumb-sep">›</span>
+<a href="/presets">题材库</a>
+<span class="crumb-sep">›</span>
+<span class="is-current">新建</span>
+{% endblock %}
 
 {% block content %}
-<section class="genre-hero">
-  <div class="genre-hero-mark">+</div>
-  <h1 class="genre-hero-title">新建 preset</h1>
-  <p class="genre-hero-sub">三条路径：读原著拆解 / 描述生成 / 手动空壳。</p>
+<section class="page-head">
+  <div class="page-head-text">
+    <h1 class="page-head-title">新建 preset</h1>
+    <p class="page-head-lede">
+      三条路径：读原著拆解（推荐）· 从描述生成 · 手动建空壳后逐字填写。
+    </p>
+  </div>
 </section>
 
-<nav class="tabs tabs-preset-new" role="tablist">
-  <button class="tab tab-active" data-tab="from-novel" role="tab">从素材库拆</button>
-  <button class="tab" data-tab="from-description" role="tab">从描述生成</button>
-  <button class="tab" data-tab="blank" role="tab">手动空壳</button>
-</nav>
+<div class="preset-form-wrap">
+  <nav class="tabs tabs-subpage" role="tablist" aria-label="新建 preset 模式">
+    <button class="tab tab-active" data-tab="from-novel" role="tab" aria-selected="true">从素材库拆解</button>
+    <button class="tab" data-tab="from-description" role="tab" aria-selected="false">从描述生成</button>
+    <button class="tab" data-tab="blank" role="tab" aria-selected="false">手动空壳</button>
+  </nav>
 
-<!-- Panel 1: from-novel -->
-<section class="genre-panel" data-panel="from-novel">
-  <form id="form-from-novel" class="extract-form">
-    <div class="form-row">
-      <label for="fn-id">新 preset id</label>
-      <input type="text" id="fn-id" name="id" required
-             placeholder="e.g. wuxia-jianghu"
-             pattern="[a-z0-9][a-z0-9-]*"
-             title="小写字母 / 数字 / 连字符" />
-    </div>
-    <div class="form-row">
-      <label>选择原著源文件</label>
-      <div class="picker-summary" id="picker-summary">加载中…</div>
-      <div class="picker-body" id="picker-body">
-        <div class="placeholder"><div class="placeholder-title">加载 /api/novels…</div></div>
+  {# Panel 1 — from-novel: kick off the genre extractor on novels/*.txt #}
+  <section class="preset-panel" data-panel="from-novel" role="tabpanel">
+    <form id="form-from-novel" class="onb-form" novalidate>
+      <div class="form-field">
+        <label class="form-label" for="fn-id">
+          新 preset id <span class="form-required">*</span>
+          <span class="form-hint">小写字母 / 数字 / 连字符</span>
+        </label>
+        <input type="text" id="fn-id" name="id" class="form-input form-input-mono" required
+               placeholder="e.g. wuxia-jianghu"
+               pattern="[a-z0-9][a-z0-9-]*" />
       </div>
-    </div>
-    <div class="form-row form-row-check">
-      <label class="check-line">
-        <input type="checkbox" id="fn-with-trial" name="with_trial" />
-        <span>with_trial — 拆解后立刻跑 3 章试验书</span>
-      </label>
-    </div>
-    <div class="form-row form-row-actions">
-      <button type="submit" class="btn btn-primary" id="fn-submit" disabled>
-        <span class="btn-glyph">⎇</span><span id="fn-submit-label">启动拆解</span>
-      </button>
-      <div class="form-error" id="fn-error" hidden></div>
-    </div>
-  </form>
-</section>
+      <div class="form-field">
+        <label class="form-label">
+          选择原著源文件
+          <span class="form-hint">从 /novels 里勾选用于拆解的样本</span>
+        </label>
+        <div class="preset-picker">
+          <div class="preset-picker-head">
+            <span>素材库</span>
+            <span id="picker-summary">加载中…</span>
+          </div>
+          <div class="preset-picker-body" id="picker-body">
+            <div class="placeholder" style="min-height:120px;padding:24px;">
+              <div class="placeholder-title">加载 /api/novels…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="field-check">
+          <input type="checkbox" id="fn-with-trial" name="with_trial" />
+          <span>with_trial — 拆解后立刻跑 3 章试验书</span>
+        </label>
+      </div>
+      <div class="form-actions">
+        <div class="form-error" id="fn-error" hidden></div>
+        <button type="submit" class="btn btn-primary" id="fn-submit" disabled>
+          <span class="btn-glyph">⎇</span><span id="fn-submit-label">启动拆解</span>
+        </button>
+      </div>
+    </form>
+  </section>
 
-<!-- Panel 2: from-description -->
-<section class="genre-panel" data-panel="from-description" hidden>
-  <form id="form-from-description" class="extract-form">
-    <div class="form-row">
-      <label for="fd-id">新 preset id</label>
-      <input type="text" id="fd-id" name="id" required
-             pattern="[a-z0-9][a-z0-9-]*" />
-    </div>
-    <div class="form-row">
-      <label for="fd-display-name">显示名</label>
-      <input type="text" id="fd-display-name" name="display_name" required />
-    </div>
-    <div class="form-row">
-      <label for="fd-tone">基调（可选）</label>
-      <input type="text" id="fd-tone" name="tone"
-             placeholder="一句话描述整体基调" />
-    </div>
-    <div class="form-row">
-      <label for="fd-description">题材描述（必填）</label>
-      <textarea id="fd-description" name="description" rows="12" required
-                placeholder="描述这个题材的时代、地域、风格、禁忌、可追踪资源等…"></textarea>
-    </div>
-    <div class="form-row form-row-actions">
-      <button type="submit" class="btn btn-primary" id="fd-submit">
-        <span class="btn-glyph">▶</span>生成 preset
-      </button>
-      <div class="form-error" id="fd-error" hidden></div>
-    </div>
-  </form>
-</section>
+  {# Panel 2 — from-description: LLM generates 4 files from a paragraph #}
+  <section class="preset-panel" data-panel="from-description" role="tabpanel" hidden>
+    <form id="form-from-description" class="onb-form" novalidate>
+      <div class="form-field">
+        <label class="form-label" for="fd-id">新 preset id <span class="form-required">*</span></label>
+        <input type="text" id="fd-id" name="id" class="form-input form-input-mono" required
+               pattern="[a-z0-9][a-z0-9-]*" placeholder="e.g. solarpunk-coastal" />
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="fd-display-name">显示名 <span class="form-required">*</span></label>
+        <input type="text" id="fd-display-name" name="display_name" class="form-input" required />
+      </div>
+      <div class="form-field form-field-optional">
+        <label class="form-label" for="fd-tone">基调 <span class="form-hint">可选 · 一句话</span></label>
+        <input type="text" id="fd-tone" name="tone" class="form-input"
+               placeholder="一句话描述整体基调" />
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="fd-description">
+          题材描述 <span class="form-required">*</span>
+          <span class="form-hint">时代 / 地域 / 风格 / 禁忌 / 可追踪资源</span>
+        </label>
+        <textarea id="fd-description" name="description" class="form-input form-input-mono" rows="12" required
+                  style="min-height:240px;line-height:1.65;resize:vertical;"
+                  placeholder="描述这个题材的时代、地域、风格、禁忌、可追踪资源…"></textarea>
+      </div>
+      <div class="form-actions">
+        <div class="form-error" id="fd-error" hidden></div>
+        <button type="submit" class="btn btn-primary" id="fd-submit">
+          <span class="btn-glyph">▶</span>生成 preset
+        </button>
+      </div>
+    </form>
+  </section>
 
-<!-- Panel 3: blank -->
-<section class="genre-panel" data-panel="blank" hidden>
-  <form id="form-blank" class="extract-form">
-    <div class="form-row">
-      <label for="fb-id">新 preset id</label>
-      <input type="text" id="fb-id" name="id" required
-             pattern="[a-z0-9][a-z0-9-]*" />
-    </div>
-    <div class="form-row">
-      <label for="fb-display-name">显示名</label>
-      <input type="text" id="fb-display-name" name="display_name" required />
-    </div>
-    <div class="form-row">
-      <label for="fb-tone">基调（可选）</label>
-      <input type="text" id="fb-tone" name="tone" />
-    </div>
-    <div class="form-row form-row-actions">
-      <button type="submit" class="btn btn-primary" id="fb-submit">
-        <span class="btn-glyph">+</span>创建空壳
-      </button>
-      <div class="form-error" id="fb-error" hidden></div>
-    </div>
-  </form>
-</section>
+  {# Panel 3 — blank: creates a 4-file skeleton for manual authoring #}
+  <section class="preset-panel" data-panel="blank" role="tabpanel" hidden>
+    <form id="form-blank" class="onb-form" novalidate>
+      <div class="form-field">
+        <label class="form-label" for="fb-id">新 preset id <span class="form-required">*</span></label>
+        <input type="text" id="fb-id" name="id" class="form-input form-input-mono" required
+               pattern="[a-z0-9][a-z0-9-]*" />
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="fb-display-name">显示名 <span class="form-required">*</span></label>
+        <input type="text" id="fb-display-name" name="display_name" class="form-input" required />
+      </div>
+      <div class="form-field form-field-optional">
+        <label class="form-label" for="fb-tone">基调 <span class="form-hint">可选</span></label>
+        <input type="text" id="fb-tone" name="tone" class="form-input" />
+      </div>
+      <div class="form-actions">
+        <div class="form-error" id="fb-error" hidden></div>
+        <button type="submit" class="btn btn-primary" id="fb-submit">
+          <span class="btn-glyph">+</span>创建空壳
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
 
-<div class="progress-box" id="progress-box" hidden>
-  <div class="progress-line">
+<aside class="preset-progress" id="progress-box" hidden aria-live="polite">
+  <div class="preset-progress-head">
     <strong id="progress-title">启动中…</strong>
     <span id="progress-detail">等待后台响应</span>
   </div>
-</div>
+</aside>
 {% endblock %}
 
 {% block scripts %}

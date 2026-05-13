@@ -1,0 +1,198 @@
+/* Page · /novels — materials library (.txt uploads).
+   Subpage chrome (.subpage-main, .page-head, .subpage-crumbs) lives
+   in pages/presets.css, loaded together in presets/_base.html. */
+
+/* Inline stats pinned to the right of the page head. */
+.novels-stats {
+  display: flex; gap: 14px; align-items: baseline;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-soft); letter-spacing: 0.02em;
+}
+.novels-stats[hidden] { display: none; }
+.novels-stats .stat { display: inline-flex; align-items: baseline; gap: 4px; }
+.novels-stats .stat-n { color: var(--amber); font-size: 13px; font-weight: 600; }
+.novels-stats .stat-l { text-transform: uppercase; font-size: 10px; }
+.novels-stats .stat-sep { opacity: 0.35; }
+
+/* Restrained dropzone — 1px dashed, flat, workstation-grade. */
+.dropzone {
+  display: block;
+  padding: 22px 20px;
+  margin-bottom: 20px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--ink-2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dropzone:hover { border-color: var(--amber-dim); background: var(--panel); }
+.dropzone.is-dragover {
+  border-color: var(--amber); border-style: solid;
+  background: rgba(255, 180, 84, 0.05);
+}
+.dropzone-icon {
+  font-family: var(--font-mono);
+  font-size: 18px; color: var(--text-soft);
+  margin-bottom: 6px;
+}
+.dropzone.is-dragover .dropzone-icon { color: var(--amber); }
+.dropzone-title {
+  font-size: 13px; color: var(--text-dim);
+  margin-bottom: 3px;
+}
+.dropzone-sub {
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-soft); letter-spacing: 0.02em;
+  line-height: 1.55;
+}
+.dropzone-sub em { color: var(--amber); font-style: normal; }
+
+/* Upload queue — one row per file, collapses when empty. */
+.upload-queue {
+  list-style: none; margin: 0 0 20px; padding: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.upload-queue:empty { display: none; }
+.upload-row {
+  display: grid;
+  grid-template-columns: 1fr 100px 74px 22px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--ink-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 11.5px;
+}
+.upload-row-name {
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.upload-row-progress {
+  height: 3px; background: var(--line);
+  border-radius: 2px; overflow: hidden;
+}
+.upload-row-fill {
+  height: 100%; width: 0%;
+  background: var(--amber);
+  transition: width 0.2s ease;
+}
+.upload-row-size { color: var(--text-soft); font-size: 10.5px; text-align: right; }
+.upload-row-status { font-size: 12px; text-align: center; color: var(--text-soft); }
+.upload-row-status.ok { color: var(--green); }
+.upload-row-status.err { color: var(--red); cursor: help; }
+.upload-row-status.pending { color: var(--amber); animation: upload-spin 1.2s linear infinite; }
+@keyframes upload-spin { to { transform: rotate(360deg); } }
+.upload-row.ok .upload-row-fill { background: var(--green); width: 100% !important; }
+.upload-row.err .upload-row-fill { background: var(--red); }
+
+/* Library table — mono, hairline dividers, hover tint, matches debt-table. */
+.novels-table-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0 2px 8px;
+  font-family: var(--font-mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.novels-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--ink-2);
+  overflow-x: auto;
+}
+.novels-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12.5px;
+}
+.novels-table thead th {
+  padding: 9px 14px; text-align: left;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-soft);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+.novels-table tbody td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+  font-family: var(--font-mono); font-size: 11.5px;
+}
+.novels-table tbody tr:last-child td { border-bottom: 0; }
+.novels-table tbody tr:hover { background: rgba(255, 180, 84, 0.035); }
+.novels-table tbody tr:hover td { border-bottom-color: var(--amber-dim); }
+.col-name { color: var(--text); }
+.col-size, .col-chapters { color: var(--text-dim); white-space: nowrap; }
+.col-enc { text-align: center; font-size: 13px; }
+.col-enc.ok { color: var(--green); }
+.col-enc.bad { color: var(--red-soft); }
+.col-format .fmt-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10px; color: var(--text-dim);
+  letter-spacing: 0.02em;
+}
+.col-format .fmt-chip.fmt-none { color: var(--red-soft); border-color: rgba(248, 81, 73, 0.3); }
+.col-format .fmt-chip.fmt-strong { color: var(--amber); border-color: var(--amber-dim); background: rgba(255, 180, 84, 0.05); }
+.col-actions { text-align: right; white-space: nowrap; }
+.col-actions .btn {
+  padding: 3px 8px; font-size: 11px;
+  margin-left: 4px;
+}
+.novels-empty-row td { padding: 0; }
+.novels-empty-row .placeholder { padding: 36px 20px; min-height: 0; }
+
+/* Preview drawer — right-sliding inspector. Aligned with .col-right spirit. */
+.preview-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(560px, 90vw);
+  background: #0c111a;
+  border-left: 1px solid var(--line);
+  box-shadow: -12px 0 48px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  animation: drawer-in 0.22s ease-out forwards;
+}
+@keyframes drawer-in { to { transform: translateX(0); } }
+.preview-drawer[hidden] { display: none; }
+.preview-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 16px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.preview-title {
+  color: var(--text); text-transform: none; letter-spacing: 0;
+  font-size: 12.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.preview-close {
+  background: transparent; border: 0;
+  color: var(--text-soft); font-size: 14px;
+  padding: 2px 8px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: color 0.12s, background 0.12s;
+}
+.preview-close:hover { color: var(--amber); background: var(--panel); }
+.preview-meta {
+  padding: 8px 16px;
+  background: var(--ink-2);
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--text-soft); letter-spacing: 0.02em;
+}
+.preview-body {
+  flex: 1; overflow-y: auto;
+  padding: 16px 18px; margin: 0;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+  color: var(--text-dim);
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--ink);
+}

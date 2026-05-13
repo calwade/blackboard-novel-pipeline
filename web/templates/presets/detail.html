@@ -3,51 +3,49 @@
 {% block crumbs %}
 <a href="/">作品</a>
 <span class="crumb-sep">›</span>
-<a href="/presets">题材</a>
+<a href="/presets">题材库</a>
 <span class="crumb-sep">›</span>
 <span class="is-current">{{ preset_id }}</span>
 {% endblock %}
 
 {% block content %}
-<section class="genre-detail" data-preset-id="{{ preset_id }}">
-  <header class="genre-detail-head">
-    <div class="genre-detail-mark">◎</div>
-    <div class="genre-detail-text">
-      <div class="genre-detail-id">{{ preset_id }}</div>
-      <h1 class="genre-detail-title" id="gd-title">—</h1>
-      <div class="genre-detail-meta" id="gd-meta"></div>
-    </div>
-    <div class="genre-detail-actions">
-      <button class="btn btn-danger" id="btn-delete" title="删除这个题材（内置题材不可删）" disabled>
-        <span class="btn-glyph">✕</span>删除
-      </button>
-    </div>
-  </header>
-
-  <div class="genre-detail-grid">
-    <!-- LEFT: preset files -->
-    <div class="genre-panel">
-      <div class="genre-panel-head">
-        <h3 class="genre-panel-title">题材包文件</h3>
-        <p class="genre-panel-sub">跨所有作品共享 · 由 bootstrap 拷入 <code>state/</code></p>
-      </div>
-      <ul class="genre-files" id="gd-files">
-        <li class="genre-files-skel">加载中…</li>
-      </ul>
-    </div>
-
-    <!-- RIGHT: attached novels -->
-    <div class="genre-panel">
-      <div class="genre-panel-head">
-        <h3 class="genre-panel-title">绑定素材 (novels/)</h3>
-        <p class="genre-panel-sub">拆解本题材时用过的原著文件</p>
-      </div>
-      <ul class="genre-files" id="gd-novels">
-        <li class="genre-files-skel">加载中…</li>
-      </ul>
-    </div>
+<section class="page-head" data-preset-id="{{ preset_id }}">
+  <div class="page-head-text">
+    <h1 class="page-head-title" id="gd-title">{{ preset_id }}</h1>
+    <p class="page-head-lede">
+      <code>{{ preset_id }}</code>
+      <span id="gd-meta" style="margin-left:8px;"></span>
+    </p>
+  </div>
+  <div class="page-head-actions">
+    <button class="btn" id="btn-delete"
+            title="删除这个题材（内置题材不可删）" disabled>
+      <span class="btn-glyph">✕</span>删除
+    </button>
   </div>
 </section>
+
+<div class="preset-detail-grid">
+  {# LEFT: the 4-7 files that make up the preset — read-only listing. #}
+  <section class="preset-card-block" aria-label="题材包文件">
+    <header class="preset-card-block-head">
+      题材包文件 · bootstrap 拷入 state/
+    </header>
+    <ul class="preset-file-list" id="gd-files">
+      <li class="is-empty">加载中…</li>
+    </ul>
+  </section>
+
+  {# RIGHT: novels/*.txt that were used to extract this preset. #}
+  <section class="preset-card-block" aria-label="绑定素材">
+    <header class="preset-card-block-head">
+      绑定素材 · novels/
+    </header>
+    <ul class="preset-file-list" id="gd-novels">
+      <li class="is-empty">加载中…</li>
+    </ul>
+  </section>
+</div>
 {% endblock %}
 
 {% block scripts %}

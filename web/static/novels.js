@@ -29,7 +29,9 @@
     const t = $('#toast');
     if (!t) return;
     t.textContent = msg;
-    t.className = 'toast toast-show' + (kind ? ' toast-' + kind : '');
+    // Align with css/components/toast.css: .is-show / .is-error
+    const errKind = kind === 'err' || kind === 'error';
+    t.className = 'toast is-show' + (errKind ? ' is-error' : '');
     clearTimeout(toast._t);
     toast._t = setTimeout(() => { t.className = 'toast'; }, 3400);
   }
@@ -111,12 +113,12 @@
       el('td', { class: 'col-format' }, [formatChip(r.detected_format)]),
       el('td', { class: 'col-actions' }, [
         el('button', {
-          class: 'btn btn-ghost btn-icon',
+          class: 'btn btn-ghost',
           title: '预览首 2000 字',
           onclick: () => openPreview(r.name),
         }, ['预览']),
         el('button', {
-          class: 'btn btn-ghost btn-icon btn-icon-danger',
+          class: 'btn btn-ghost',
           title: '删除',
           onclick: () => confirmDelete(r.name),
         }, ['删除']),

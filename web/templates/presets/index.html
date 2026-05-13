@@ -2,31 +2,25 @@
 {% block title %}题材库 · Novelforge{% endblock %}
 
 {% block content %}
-<section class="genre-hero">
-  <div class="genre-hero-mark">◎</div>
-  <h1 class="genre-hero-title">题材库</h1>
-  <p class="genre-hero-sub">
-    题材 = 世界观事实 + 风格规范 + 特有铁律。<br />
-    多本书共享一份题材，<em class="hero-em">切一次，跑一批</em>。
-  </p>
-</section>
-
-<section class="genre-hero-cta">
-  <a href="/presets/new" class="btn btn-primary btn-lg">
-    <span class="btn-glyph">+</span>新建 preset
-  </a>
-</section>
-
-<section class="genre-grid-wrap">
-  <div class="col-header col-header-genres">
-    <span class="col-title">所有题材</span>
-    <span class="col-hint" id="genre-count">加载中…</span>
+<section class="page-head">
+  <div class="page-head-text">
+    <h1 class="page-head-title">题材库</h1>
+    <p class="page-head-lede">
+      题材 = 世界观事实 + 风格规范 + 特有铁律。<br />
+      新建作品时可从这里挑一份作为起点；之后作品目录里的 4 份文件就与 preset 解耦。
+    </p>
   </div>
-  <div class="genre-grid" id="genre-grid">
-    <div class="genre-card genre-card-skel">
-      <div class="genre-card-skel-bar"></div>
-      <div class="genre-card-skel-bar"></div>
-      <div class="genre-card-skel-bar genre-card-skel-bar-short"></div>
+  <div class="page-head-actions">
+    <a href="/presets/new" class="btn btn-primary">
+      <span class="btn-glyph">+</span>新建 preset
+    </a>
+  </div>
+</section>
+
+<section>
+  <div class="preset-grid" id="genre-grid" aria-live="polite">
+    <div class="placeholder" style="grid-column:1/-1;min-height:180px;">
+      <div class="placeholder-title">加载中…</div>
     </div>
   </div>
 </section>
