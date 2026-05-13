@@ -20,22 +20,26 @@
 
 <div class="preset-form-wrap">
   <nav class="tabs tabs-subpage" role="tablist" aria-label="新建 preset 模式">
-    <button class="tab tab-active" data-tab="from-novel" role="tab" aria-selected="true">从素材库拆解</button>
+    <button class="tab tab-active active" data-tab="from-novel" role="tab" aria-selected="true">从素材库拆解</button>
     <button class="tab" data-tab="from-description" role="tab" aria-selected="false">从描述生成</button>
     <button class="tab" data-tab="blank" role="tab" aria-selected="false">手动空壳</button>
   </nav>
 
   {# Panel 1 — from-novel: kick off the genre extractor on novels/*.txt #}
-  <section class="preset-panel" data-panel="from-novel" role="tabpanel">
+  <section class="preset-panel tab-panel" data-tab="from-novel" role="tabpanel">
     <form id="form-from-novel" class="onb-form" novalidate>
       <div class="form-field">
         <label class="form-label" for="fn-id">
           新 preset id <span class="form-required">*</span>
           <span class="form-hint">小写字母 / 数字 / 连字符</span>
         </label>
-        <input type="text" id="fn-id" name="id" class="form-input form-input-mono" required
+        <input type="text" id="fn-id" name="preset_id" class="form-input form-input-mono" required
                placeholder="e.g. wuxia-jianghu"
                pattern="[a-z0-9][a-z0-9-]*" />
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="fn-display-name">显示名 <span class="form-required">*</span></label>
+        <input type="text" id="fn-display-name" name="display_name" class="form-input" required />
       </div>
       <div class="form-field">
         <label class="form-label">
@@ -54,15 +58,9 @@
           </div>
         </div>
       </div>
-      <div class="form-field">
-        <label class="field-check">
-          <input type="checkbox" id="fn-with-trial" name="with_trial" />
-          <span>with_trial — 拆解后立刻跑 3 章试验书</span>
-        </label>
-      </div>
       <div class="form-actions">
         <div class="form-error" id="fn-error" hidden></div>
-        <button type="submit" class="btn btn-primary" id="fn-submit" disabled>
+        <button type="submit" class="btn btn-primary" id="fn-submit">
           <span class="btn-glyph">⎇</span><span id="fn-submit-label">启动拆解</span>
         </button>
       </div>
@@ -70,11 +68,11 @@
   </section>
 
   {# Panel 2 — from-description: LLM generates 4 files from a paragraph #}
-  <section class="preset-panel" data-panel="from-description" role="tabpanel" hidden>
+  <section class="preset-panel tab-panel" data-tab="from-description" role="tabpanel" style="display:none;">
     <form id="form-from-description" class="onb-form" novalidate>
       <div class="form-field">
         <label class="form-label" for="fd-id">新 preset id <span class="form-required">*</span></label>
-        <input type="text" id="fd-id" name="id" class="form-input form-input-mono" required
+        <input type="text" id="fd-id" name="preset_id" class="form-input form-input-mono" required
                pattern="[a-z0-9][a-z0-9-]*" placeholder="e.g. solarpunk-coastal" />
       </div>
       <div class="form-field">
@@ -105,11 +103,11 @@
   </section>
 
   {# Panel 3 — blank: creates a 4-file skeleton for manual authoring #}
-  <section class="preset-panel" data-panel="blank" role="tabpanel" hidden>
+  <section class="preset-panel tab-panel" data-tab="blank" role="tabpanel" style="display:none;">
     <form id="form-blank" class="onb-form" novalidate>
       <div class="form-field">
         <label class="form-label" for="fb-id">新 preset id <span class="form-required">*</span></label>
-        <input type="text" id="fb-id" name="id" class="form-input form-input-mono" required
+        <input type="text" id="fb-id" name="preset_id" class="form-input form-input-mono" required
                pattern="[a-z0-9][a-z0-9-]*" />
       </div>
       <div class="form-field">
@@ -129,20 +127,8 @@
     </form>
   </section>
 </div>
-
-<aside class="preset-progress" id="progress-box" hidden aria-live="polite">
-  <div class="preset-progress-head">
-    <strong id="progress-title">启动中…</strong>
-    <span id="progress-detail">等待后台响应</span>
-  </div>
-</aside>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='presets.js') }}" defer></script>
-<script defer>
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.GenreUI && window.GenreUI.initNewPage) window.GenreUI.initNewPage();
-  });
-</script>
+<script type="module" src="{{ url_for('static', filename='js/features/presetNew.js') }}"></script>
 {% endblock %}

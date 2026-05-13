@@ -34,25 +34,30 @@ def test_presets_new_has_three_tabs(app_):
 def test_presets_new_has_three_panels(app_):
     r = app_.get("/presets/new")
     body = r.get_data(as_text=True)
+    # Each panel is a section with data-tab=<kind>
     for panel_id in ("from-novel", "from-description", "blank"):
-        assert f'data-panel="{panel_id}"' in body
+        assert f'data-tab="{panel_id}"' in body
 
 
 def test_presets_new_panels_have_required_fields(app_):
     r = app_.get("/presets/new")
     body = r.get_data(as_text=True)
-    # Each panel has an id input
-    assert body.count('name="id"') >= 3
+    # Each panel has a preset_id input (one per tab)
+    assert body.count('name="preset_id"') >= 3
     # from-description panel has description textarea
     assert 'name="description"' in body
     # from-novel panel loads novels list (has a target div)
     assert 'id="picker-body"' in body or 'novels-pool-checkboxes' in body
 
 
-def test_presets_js_wires_three_tabs():
+def test_presets_new_submits_via_presetnew_module():
+    """The template should load the new ES module for /api/jobs submission."""
     REPO = Path(__file__).resolve().parent.parent
-    text = (REPO / "web" / "static" / "presets.js").read_text(encoding="utf-8")
-    # Must call all three new endpoints
-    assert "/api/presets/new-from-novel" in text
-    assert "/api/presets/new-from-description" in text
-    assert "/api/presets/new-blank" in text
+    tpl = (REPO / "web" / "templates" / "presets" / "new.html").read_text(encoding="utf-8")
+    assert "js/features/presetNew.js" in tpl
+    js = (REPO / "web" / "static" / "js" / "features" / "presetNew.js").read_text(encoding="utf-8")
+    # Must POST to /api/jobs for all three kinds
+    assert "/api/jobs" in js
+    assert '"from-novel"' in js
+    assert '"from-description"' in js
+    assert '"blank"' in js
