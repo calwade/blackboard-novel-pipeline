@@ -51,6 +51,84 @@ from . import config
 
 MAX_FIXER_RETRIES = 2
 
+
+def _blank_chapter_shell(i: int) -> dict:
+    """Empty chapter shell. Mirrors src.bootstrap._blank_chapters item shape.
+
+    Copied (not imported) to avoid any import-order coupling with bootstrap —
+    this helper is trivial and the shape is a stable contract Planner depends on.
+    """
+    return {"ch": i, "title": f"第 {i} 章", "beats": []}
+
+
+def _heal_outline_if_needed(bb: Blackboard) -> None:
+    """Self-heal: pre-fill missing chapter shells in state/outline.json.
+
+    Historical projects created before the blank-outline fix (commit a1c7034)
+    have `outline.json == {"chapters": []}`. Planner has an in-prompt fallback
+    for missing entries, but the file itself never gets fixed, so every run
+    re-pays that cost and downstream agents never see historical chapters as
+    structural placeholders.
+
+    This runs once at the top of run_chapter and fills any gap up to
+    `setting.yaml::chapter_count_target` (default 50). Existing non-empty
+    entries are preserved verbatim — we only append shells for indexes that
+    are missing.
+
+    Only the state/ runtime copy is patched. The authoritative
+    projects/<id>/outline.json source is left alone — bootstrap will re-seed
+    state/ from there on the next activation, so the user keeps full control
+    over the source of truth.
+    """
+    try:
+        outline = bb.read_json("outline.json")
+    except FileNotFoundError:
+        return  # not bootstrapped; nothing to heal
+    if not isinstance(outline, dict):
+        return
+    existing = outline.get("chapters") or []
+    if not isinstance(existing, list):
+        existing = []
+
+    # Determine target length
+    try:
+        setting = bb.read_yaml("setting.yaml") or {}
+    except FileNotFoundError:
+        setting = {}
+    try:
+        target = int(setting.get("chapter_count_target", 50))
+    except (TypeError, ValueError):
+        target = 50
+    if target <= 0:
+        return
+
+    if len(existing) >= target:
+        return  # nothing to do
+
+    # Index existing entries by ch number (int) so we can preserve them
+    by_ch: dict[int, dict] = {}
+    for item in existing:
+        if isinstance(item, dict) and isinstance(item.get("ch"), int):
+            by_ch[item["ch"]] = item
+
+    new_chapters: list[dict] = []
+    added_indexes: list[int] = []
+    for i in range(1, target + 1):
+        if i in by_ch:
+            new_chapters.append(by_ch[i])
+        else:
+            new_chapters.append(_blank_chapter_shell(i))
+            added_indexes.append(i)
+
+    if not added_indexes:
+        return  # existing entries already cover 1..target (rare but possible)
+
+    outline["chapters"] = new_chapters
+    bb.write_json("outline.json", outline)
+    # Contiguous range for the log line
+    start, end = added_indexes[0], added_indexes[-1]
+    print(f"[heal] outline prefilled ch{start}-ch{end}", flush=True)
+
 # Cooperative cancel signal. Web UI sets this via POST /api/abort; every
 # pipeline stage checks before starting. Stale signals are the caller's
 # responsibility to clear before starting a new run.
@@ -106,6 +184,11 @@ def _append_debt(bb: Blackboard, chapter: int, verdict: dict, retries_used: int)
 
 def run_chapter(bb: Blackboard, chapter: int) -> dict:
     """Run the full pipeline for one chapter. Returns a status dict."""
+    # Self-heal legacy projects whose state/outline.json is still `chapters: []`
+    # (created before the blank-outline prefill fix). Keeps Planner's in-prompt
+    # fallback as a second line of defence, but stops every run from paying for it.
+    _heal_outline_if_needed(bb)
+
     started_at = time.time()
     status: dict = {"chapter": chapter, "started_at": started_at, "stages": {}}
 
