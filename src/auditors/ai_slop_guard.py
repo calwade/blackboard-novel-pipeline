@@ -15,9 +15,122 @@ as if it were a PR from a background agent.
 from __future__ import annotations
 
 import json
+import re
 
 from ..agents._base import BaseAgent
 from ..blackboard import Blackboard
+
+# ---------------------------------------------------------------------------
+# Static AI-rhythm scanner (non-LLM)
+# ---------------------------------------------------------------------------
+#
+# 2026 LLM 节奏痕迹专项扫描。因为 Generator / Evaluator / AISlopGuard 三个
+# agent 共享同一套训练偏好（对"优美"的定义），对于这四类确定性痕迹会集体
+# 灯下黑。用纯正则 + 段落统计做兜底审计，结果拼在 LLM patch 前面，确保
+# 可被人看到、被下游 Fixer 修。
+#
+# 阈值基于「健康网文密度」（每章 ~5000 字）手工标定，后续可用
+# scripts/calibrate_slop_thresholds.py 在全量章节上校准。
+SLOP_THRESHOLDS = {
+    "neg_contrast": {"moderate": 5, "severe": 10},   # 不是X，是Y
+    "emdash":       {"moderate": 20, "severe": 30},  # ——
+    "short_para":   {"moderate": 0.35, "severe": 0.50},  # <30 字成段占比
+    "simile":       {"moderate": 25, "severe": 40},  # 像X
+}
+
+
+def static_scan_ai_rhythm(text: str) -> dict:
+    """
+    非 LLM 静态扫描 4 类确定性 AI 节奏痕迹。
+
+    返回 dict:
+      - hits: list of {criterion, severity, count, threshold, suggested_direction, ...}
+      - metrics: 原始测量值（neg_contrast / emdash / short_para_ratio / simile / total_paras）
+
+    criterion 命名用 rhythm_neg_contrast / rhythm_emdash / rhythm_short_para /
+    rhythm_simile，避免与 landmine_N 冲突。
+    """
+    # 1. 段落切分（去掉标题行 # 开头）
+    paras = [p.strip() for p in text.split("\n\n") if p.strip() and not p.lstrip().startswith("#")]
+    total_paras = max(len(paras), 1)
+
+    # 2. 剥离对话引号内容（避免对话里被打断的破折号 "你——" 误报为描写节奏切分）
+    text_no_dialogue = re.sub(r'"[^"]*"', "", text)
+    text_no_dialogue = re.sub(r'「[^」]*」', "", text_no_dialogue)
+    text_no_dialogue = re.sub(r'"[^"]*"', "", text_no_dialogue)
+
+    # 3. 四项计数
+    #    - neg_contrast: "不是 X，[而]是 Y" 句式
+    neg_contrast = re.findall(
+        r"不是[^，。,\n]{1,20}[，,][^。\n]{0,3}?是[^。\n]{1,40}",
+        text,
+    )
+    emdash = text_no_dialogue.count("——")
+    short_paras = [p for p in paras if len(p) < 30]
+    short_ratio = len(short_paras) / total_paras
+    similes = re.findall(r"像[^，。\n]{1,30}", text)
+
+    metrics = {
+        "neg_contrast": len(neg_contrast),
+        "emdash": emdash,
+        "short_para_ratio": round(short_ratio, 3),
+        "simile": len(similes),
+        "total_paras": total_paras,
+    }
+
+    hits: list[dict] = []
+
+    def _grade(value, thresholds):
+        if value >= thresholds["severe"]:
+            return "severe"
+        if value >= thresholds["moderate"]:
+            return "moderate"
+        return None
+
+    # neg_contrast
+    sev = _grade(len(neg_contrast), SLOP_THRESHOLDS["neg_contrast"])
+    if sev:
+        hits.append({
+            "criterion": "rhythm_neg_contrast",
+            "severity": sev,
+            "count": len(neg_contrast),
+            "threshold": SLOP_THRESHOLDS["neg_contrast"]["moderate"],
+            "snippet": (neg_contrast[0] if neg_contrast else "")[:60],
+            "suggested_direction": "合并'不是X，是Y'为单句陈述；全章保留至多 2 处作点睛",
+        })
+    # emdash
+    sev = _grade(emdash, SLOP_THRESHOLDS["emdash"])
+    if sev:
+        hits.append({
+            "criterion": "rhythm_emdash",
+            "severity": sev,
+            "count": emdash,
+            "threshold": SLOP_THRESHOLDS["emdash"]["moderate"],
+            "suggested_direction": "删除 70% 破折号；用逗号/句号重构节奏；破折号仅保留对话被打断",
+        })
+    # short_para
+    sev = _grade(short_ratio, SLOP_THRESHOLDS["short_para"])
+    if sev:
+        hits.append({
+            "criterion": "rhythm_short_para",
+            "severity": sev,
+            "count": f"{short_ratio*100:.1f}%",
+            "threshold": f"{SLOP_THRESHOLDS['short_para']['moderate']*100:.0f}%",
+            "suggested_direction": "合并相邻短段为完整叙述段（3-5 行）；单独成段留给转折/悬念/对话",
+        })
+    # simile
+    sev = _grade(len(similes), SLOP_THRESHOLDS["simile"])
+    if sev:
+        hits.append({
+            "criterion": "rhythm_simile",
+            "severity": sev,
+            "count": len(similes),
+            "threshold": SLOP_THRESHOLDS["simile"]["moderate"],
+            "suggested_direction": "删除 40% 明喻；优先保留有画面感的点睛，删掉装饰性的",
+        })
+
+    return {"hits": hits, "metrics": metrics}
+
 
 # Subset of landmines relevant to AI-slop only. Kept as inline text so
 # the auditor's prompt stays small & focused.
@@ -55,12 +168,29 @@ class AISlopGuard(BaseAgent):
         text = bb.read_text(chapter_path)
         inputs_read = [f"state/{chapter_path}"]
 
+        # Static pre-scan: tell the LLM the 4 deterministic rhythm metrics
+        # have already been measured mechanically, so it shouldn't waste
+        # hits on them and can focus on other AI-slop categories.
+        static_scan = static_scan_ai_rhythm(text)
+        metrics = static_scan["metrics"]
+        prescan_note = (
+            "\n\n# 已机械扫描的 4 项节奏指标（你不用重复报）\n"
+            f"- 否定对比 '不是X，是Y': {metrics['neg_contrast']} 次\n"
+            f"- 破折号 '——': {metrics['emdash']} 次\n"
+            f"- 短段（<30 字）占比: {metrics['short_para_ratio']*100:.1f}%（共 {metrics['total_paras']} 段）\n"
+            f"- 明喻 '像X': {metrics['simile']} 次\n"
+            "这四类静态扫描器已经会生成补丁条目。你的职责是补充**其他 AI 味问题**"
+            "（了字堆砌、固定句式、形容词堆砌、高疲劳词、空泛抒情、AI 式说教等），"
+            "不要重复报上述四类。\n"
+        )
+
         system = (
             "你是专门扫描 AI 味的独立审计员。\n"
             "你的职责范围只有 AI 味——人设、时间线、剧情主线等问题不归你管。\n"
             "\n"
             "# AI 味判据（你只看这些）\n"
             + AI_SLOP_CRITERIA
+            + prescan_note
             + "\n\n"
             "# 输出要求\n"
             "严格 JSON。包含：slop_score（0 无 AI 味 — 10 满屏 AI 味）、\n"
@@ -105,8 +235,6 @@ class AISlopGuard(BaseAgent):
         return system, user, inputs_read
 
     def _handle_output(self, bb: Blackboard, raw: str, *, chapter: int, **_):
-        import re
-
         s = raw.strip()
         m = re.search(r"```(?:json)?\s*(.*?)\s*```", s, re.S)
         if m:
@@ -124,6 +252,15 @@ class AISlopGuard(BaseAgent):
                 "_raw_excerpt": raw[-500:],
             }
 
+        # Re-run static scan here (cheap pure regex) so the patch file can
+        # render the mechanical hits in front of the LLM hits. This keeps
+        # _build_prompts and _handle_output both stateless.
+        chapter_path = f"chapters/ch{chapter:03d}.md"
+        text = bb.read_text(chapter_path)
+        static_scan = static_scan_ai_rhythm(text)
+        static_hits = static_scan["hits"]
+        metrics = static_scan["metrics"]
+
         # Render as a human-readable patch file (Lesson 4: visible artifact)
         md_lines = [
             f"# AISlopGuard 补丁 · 第 {chapter} 章",
@@ -133,6 +270,39 @@ class AISlopGuard(BaseAgent):
             f"**命中数**：{len(obj.get('hits', []))}",
             "",
         ]
+
+        # 静态优先：先渲染机械扫描命中的 4 类节奏痕迹（Generator/Evaluator/AISlopGuard
+        # 三个 LLM 的灯下黑兜底），再接 LLM 的判断。
+        if static_hits:
+            md_lines.extend([
+                "## 机械扫描命中（静态阈值）",
+                "",
+                "> 以下 4 类为 2026 LLM 节奏痕迹，由 `static_scan_ai_rhythm` 纯正则识别。",
+                "> 指标来自全文统计，绕过 LLM 主观判断。",
+                "",
+                f"- neg_contrast={metrics['neg_contrast']} · "
+                f"emdash={metrics['emdash']} · "
+                f"short_para={metrics['short_para_ratio']*100:.1f}% · "
+                f"simile={metrics['simile']} · "
+                f"total_paras={metrics['total_paras']}",
+                "",
+            ])
+            for i, h in enumerate(static_hits, 1):
+                md_lines.append(
+                    f"### 静态 {i} — {h['criterion']} · {h['severity']} "
+                    f"(count={h['count']}, threshold={h['threshold']})"
+                )
+                md_lines.append("")
+                if h.get("snippet"):
+                    md_lines.append(f"**样本**：{h['snippet']}")
+                    md_lines.append("")
+                md_lines.append(f"**修复方向**：{h['suggested_direction']}")
+                md_lines.append("")
+            md_lines.append("---")
+            md_lines.append("")
+            md_lines.append("## LLM 补充命中")
+            md_lines.append("")
+
         for i, h in enumerate(obj.get("hits", []), 1):
             sev = h.get("severity", "moderate")
             md_lines.append(f"## 问题 {i} — 规则 {h.get('criterion_id', '?')} · 严重度 {sev}")
