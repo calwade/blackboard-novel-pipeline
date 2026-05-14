@@ -372,6 +372,12 @@ def create_project(
     # outline.json — drafter or blank
     # drafter 失败（网络/LLM 格式）不阻断作品创建：落 blank 兜底 +
     # warnings_collector 里加一条，前端据此提示"去详情页重跑 drafter"。
+    #
+    # 注意：blank outline **不能**写 `chapters: []` —— Planner 按 `ch` 字段查
+    # 找当前章节条目，找不到就抛 `ValueError("Chapter N not in outline")`，
+    # 流水线直接崩在第 1 章。所以 blank 路径要预填 N 个空壳章节
+    # （N = chapter_count_target），让 Planner 依赖 status_card +
+    # pending_hooks + 前情摘要即兴写。
     if outline_synopsis:
         try:
             from src.agents.outline_drafter import OutlineDrafter
@@ -383,7 +389,8 @@ def create_project(
             _write_json(project_dir / "outline.json", outline_data)
         except Exception as e:  # noqa: BLE001
             _write_json(project_dir / "outline.json", {
-                "title": display_name, "chapters": [],
+                "title": display_name,
+                "chapters": _blank_chapters(chapter_count_target),
             })
             if warnings_collector is not None:
                 warnings_collector.append({
@@ -395,7 +402,7 @@ def create_project(
     else:
         _write_json(project_dir / "outline.json", {
             "title": display_name,
-            "chapters": [],
+            "chapters": _blank_chapters(chapter_count_target),
         })
 
     # characters.yaml — drafter or blank（同样 drafter 失败不阻断）
@@ -434,6 +441,21 @@ def create_project(
 # -----------------------------------------------------------------------------
 # Internals
 # -----------------------------------------------------------------------------
+
+def _blank_chapters(n: int) -> list[dict]:
+    """Return N empty chapter shells for blank-outline projects.
+
+    Planner 按 `ch` 字段定位当前章节；没有预填条目的话会抛
+    ValueError("Chapter N not in outline")。这里给每章一个空 beats 的占位，
+    让流水线能跑起来（Planner 依赖 status_card / pending_hooks / 摘要即兴写）。
+    """
+    if n <= 0:
+        return []
+    return [
+        {"ch": i, "title": f"第 {i} 章", "beats": []}
+        for i in range(1, n + 1)
+    ]
+
 
 def _write_yaml(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -33,7 +33,9 @@ class Planner(BaseAgent):
         # Find the current chapter entry
         cur = next((c for c in chapters if c["ch"] == chapter), None)
         if cur is None:
-            raise ValueError(f"Chapter {chapter} not in outline")
+            # Outline 不完整（如 blank 未预填、作者手动删条目）：用空壳兜底
+            # Planner 依赖 status_card + pending_hooks + 前情摘要即兴写
+            cur = {"ch": chapter, "title": f"第 {chapter} 章", "beats": []}
 
         # Setting metadata for the persona line
         try:

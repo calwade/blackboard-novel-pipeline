@@ -45,11 +45,19 @@ def test_outline_drafter_produces_structured_outline(stub_llm):
 
 
 def test_outline_drafter_empty_synopsis_returns_blank_shell():
+    """Empty synopsis → shell with N pre-filled empty-beat chapters.
+
+    空壳不能是 chapters=[]：Planner 按 `ch` 字段查找当前章节条目，
+    chapters=[] 会让第 1 章直接崩 (ValueError)。所以 shell 路径要预填
+    N 个空壳章节让 Planner 依赖 status_card/pending_hooks/摘要即兴写。
+    """
     from src.agents.outline_drafter import OutlineDrafter
     agent = OutlineDrafter()
     out = agent.run(synopsis="", chapter_count_target=10, display_name="Blank")
     assert out["title"] == "Blank"
-    assert out["chapters"] == []
+    assert len(out["chapters"]) == 10
+    assert out["chapters"][0] == {"ch": 1, "title": "第 1 章", "beats": []}
+    assert out["chapters"][-1]["ch"] == 10
 
 
 def test_outline_drafter_falls_back_to_shell_on_bad_json(monkeypatch):

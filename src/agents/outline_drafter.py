@@ -26,6 +26,23 @@ from src import llm
 
 log = logging.getLogger(__name__)
 
+
+def _blank_chapters(n: int) -> list[dict]:
+    """Return N empty chapter shells (mirrors src.bootstrap._blank_chapters).
+
+    Planner 按 `ch` 字段查找当前章节条目；chapters=[] 会让第 1 章直接崩。
+    drafter 输出不可用时（空 synopsis / JSON 解析失败 / 形状不对）用这个
+    兜底，让流水线能继续跑，Planner 依赖 status_card + pending_hooks +
+    前情摘要即兴写。
+    """
+    if n <= 0:
+        return []
+    return [
+        {"ch": i, "title": f"第 {i} 章", "beats": []}
+        for i in range(1, n + 1)
+    ]
+
+
 SYSTEM_PROMPT = """\
 你是一位资深中文小说责编。用户会给你一段"故事梗概"自由文本，请你输出严格的 JSON 章节大纲。
 
@@ -52,7 +69,7 @@ class OutlineDrafter:
 
     def run(self, *, synopsis: str, chapter_count_target: int, display_name: str) -> dict:
         if not synopsis or not synopsis.strip():
-            return {"title": display_name, "chapters": []}
+            return {"title": display_name, "chapters": _blank_chapters(chapter_count_target)}
 
         user = (
             f"小说标题：{display_name}\n"
@@ -73,10 +90,10 @@ class OutlineDrafter:
             data = json.loads(raw)
         except (json.JSONDecodeError, KeyError) as exc:
             log.warning("OutlineDrafter bad JSON, returning shell: %s", exc)
-            return {"title": display_name, "chapters": []}
+            return {"title": display_name, "chapters": _blank_chapters(chapter_count_target)}
 
         if not isinstance(data, dict) or "chapters" not in data:
-            return {"title": display_name, "chapters": []}
+            return {"title": display_name, "chapters": _blank_chapters(chapter_count_target)}
 
         # Truncate / pad to match target; 强制字段名为 `ch`（与 Planner/Packaging 契约一致）
         # 兼容模型返回的旧字段名 index/number/id，转换后清理掉

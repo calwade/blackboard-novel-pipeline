@@ -98,19 +98,26 @@ def test_drafter_output_is_planner_compatible(monkeypatch):
     assert cur3["title"] == "C"
 
 
-def test_drafter_empty_synopsis_returns_shell_with_empty_chapters():
-    """synopsis 为空走 shell 分支，返回 {title, chapters: []}，不调 LLM。"""
+def test_drafter_empty_synopsis_returns_shell_with_prefilled_chapters():
+    """synopsis 为空走 shell 分支，返回 N 个空壳章节（不是 chapters=[]）。
+
+    原因：chapters=[] 会让 Planner 按 `ch` 查找时命中不到，抛 ValueError
+    导致流水线第 1 章就崩。shell 必须预填让 Planner 有空壳可用。不调 LLM。
+    """
     from src.agents.outline_drafter import OutlineDrafter
     out = OutlineDrafter().run(
         synopsis="", chapter_count_target=5, display_name="空壳书"
     )
-    assert out == {"title": "空壳书", "chapters": []}
+    assert out["title"] == "空壳书"
+    assert len(out["chapters"]) == 5
+    assert out["chapters"][0] == {"ch": 1, "title": "第 1 章", "beats": []}
 
     # whitespace-only 也应该走 shell
     out2 = OutlineDrafter().run(
         synopsis="   \n\t  ", chapter_count_target=5, display_name="空壳书"
     )
-    assert out2 == {"title": "空壳书", "chapters": []}
+    assert out2["title"] == "空壳书"
+    assert len(out2["chapters"]) == 5
 
 
 def test_drafter_handles_chapters_without_any_index_field(monkeypatch):
