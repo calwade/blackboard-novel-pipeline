@@ -23,3 +23,4 @@ presets/*/.build/
 # Genre jobs runtime artifacts (job metadata + logs)
 .jobs/
 .dna_dryrun/
+projects/book-*/
