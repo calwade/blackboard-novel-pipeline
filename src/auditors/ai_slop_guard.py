@@ -132,6 +132,15 @@ def static_scan_ai_rhythm(text: str) -> dict:
     return {"hits": hits, "metrics": metrics}
 
 
+# AI_SLOP_CRITERIA 与 rules/landmines.md (landmine_18) + rules/iron-laws.md (iron_law_24)
+# 部分重叠是**故意为之的双层架构**：
+#   - landmines.md / iron-laws.md = 给 Evaluator 的现象对照表（简短判据）
+#   - AI_SLOP_CRITERIA           = 给独立审计员的写作技法层（带阈值和示例）
+# AISlopGuard 作为 Lesson 4 独立审计员，应该自带详细判据集而不依赖主流水线规则文件。
+# 第 11 条（高疲劳词黑名单）是 AISlopGuard 独有，未在任何 rules/ 文件——
+# 不值得抽到 rules（只有此 agent 用得上）。
+# 详见 commit 156ee99 后的 oracle 审计报告（agent ↔ rules 对接）。
+#
 # Subset of landmines relevant to AI-slop only. Kept as inline text so
 # the auditor's prompt stays small & focused.
 AI_SLOP_CRITERIA = """

@@ -151,6 +151,9 @@
 > `rules/ai-rhythm-taboos.md`。Evaluator 在静态扫描超阈值时直接命中 landmine_18，
 > severity 由 ai-rhythm-taboos.md 表决定（moderate/severe）。
 
+> AISlopGuard 维护更详细的 AI 味判据集（含阈值与高疲劳词黑名单），
+> 见 `src/auditors/ai_slop_guard.py` 的 `AI_SLOP_CRITERIA`。
+
 ## landmine_19: 因果颠倒归因／记错功劳
 
 **触发**: 角色在对话或内心独白中，把实际由他人做出的关键行动（救命、送情报、挡灾、搭桥）归功于自己；或反之，把自己承担的风险说成是对方的人情。出现"我救了你"但文本证据显示是对方救了"我"这类方向性错误。

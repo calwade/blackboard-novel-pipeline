@@ -5,6 +5,10 @@ Reads:
   - state/chapters/ch{N:03d}.verdict.json (top_3_fixes + hit landmines)
   - rules/writing-iron-laws.md   (19 writing iron laws — same red lines as Generator)
   - rules/writing-style-core.md  (句段词描写技法手册) + state/writing-style-extra.md
+  - rules/ai-rhythm-taboos.md    (AI-rhythm 4-threshold authority — target values when
+                                  fixing landmine_18 hits; symmetric with Generator)
+  - rules/00-information-priority.md  (referenced in conflict-arbitration clause;
+                                       not loaded into prompt — observability only)
 
 Writes (overwrites):
   - state/chapters/ch{N:03d}.md
@@ -34,6 +38,7 @@ class Fixer(BaseAgent):
         style_core = self._read_rule("writing-style-core.md")
         style_extra = bb.read_text("writing-style-extra.md")
         writing_iron_laws = self._read_rule("writing-iron-laws.md")
+        ai_rhythm_taboos = self._read_rule("ai-rhythm-taboos.md")
 
         try:
             setting = bb.read_yaml("setting.yaml")
@@ -52,6 +57,8 @@ class Fixer(BaseAgent):
             "state/setting.yaml",
             "rules/writing-iron-laws.md",
             "rules/writing-style-core.md",
+            "rules/ai-rhythm-taboos.md",
+            "rules/00-information-priority.md",  # referenced in conflict-arbitration clause; not loaded into prompt
         ]
 
         # Gather hit landmines for surgical reference
@@ -98,6 +105,8 @@ class Fixer(BaseAgent):
             + style_core
             + "\n\n## 题材特有风格（setting 注入）\n\n"
             + style_extra
+            + "\n\n# ⚠ AI 节奏阈值（修 landmine_18 命中时的目标值，与 Generator 同源）\n\n"
+            + ai_rhythm_taboos
         )
 
         user = (
