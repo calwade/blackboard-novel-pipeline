@@ -6,6 +6,7 @@ Reads (all genre content comes from the active setting pack via state/):
   - state/setting.yaml                     — active setting metadata
   - state/era.md                           — setting's world/era facts
   - state/writing-style-extra.md           — setting-specific style quirks
+  - rules/writing-iron-laws.md             — 7 core writing iron laws (subset of iron-laws.md)
   - rules/writing-style-core.md            — universal style rules
   - rules/ai-rhythm-taboos.md              — hard taboos, appended last (conflict arbitration)
   - state/summaries/ch{N-1}.md             — continuity from prior chapter
@@ -37,6 +38,7 @@ class Generator(BaseAgent):
 
         writing_style_core = self._read_rule("writing-style-core.md")
         writing_style_extra = bb.read_text("writing-style-extra.md")
+        writing_iron_laws = self._read_rule("writing-iron-laws.md")
         ai_rhythm_taboos = self._read_rule("ai-rhythm-taboos.md")
         era = bb.read_text("era.md")
 
@@ -54,6 +56,7 @@ class Generator(BaseAgent):
             "state/setting.yaml",
             "state/era.md",
             "state/writing-style-extra.md",
+            "rules/writing-iron-laws.md",
             "rules/writing-style-core.md",
             "rules/ai-rhythm-taboos.md",
         ]
@@ -132,18 +135,9 @@ class Generator(BaseAgent):
             f"10. 收益必须**具体化**。不得用『更强了』『暴涨』『海量』『难以估量』掩盖数值跳变；\n"
             f"    具体落到道具名、资源单位、地位变化或已回收伏笔。\n"
             f"\n"
-            f"# 动笔前自问 7 问（必须在心里过一遍，答不上的重审节拍表）\n"
-            f"\n"
-            f"1. 此刻主角利益最大化的选择是什么？为什么必须做这个动作？\n"
-            f"2. 这场冲突是谁先动手，为什么非打不可？\n"
-            f"3. 配角/反派是否有明确诉求、恐惧和反制，而不是站着等死？\n"
-            f"4. 反派当前掌握了哪些已知信息、误判、盲区？哪些信息只有读者知道、反派不知道？\n"
-            f"5. 反派的每一步关键动作，能否都追溯到其已知信息、资源约束、性格习惯或上一轮误判？\n"
-            f"   如果不能——**重写动作链**，不是放过。\n"
-            f"6. 本段剧情解决问题靠的是前文已铺垫的能力/底牌/信息，还是凭空掉设定？\n"
-            f"7. 本章收益是否能落到**具体资源 / 数值增量 / 地位变化 / 已回收伏笔**，而不是抽象『更强了』？\n"
-            f"\n"
-            f"如果任何一个问题答不上来，先补动机链或找 Planner 重改节拍表，再写正文。\n"
+            f"# 动笔前的检查\n\n"
+            f"违反任何 iron_law 都会被 Evaluator 抓——写作时主动向 Evaluator 兼容。\n"
+            f"具体红线见下方「创作铁律」段（7 条核心，写正文前先把每条在心里过一遍）。\n"
             f"\n"
             f"# 本章类型：{chapter_type or '未指定'}\n\n"
             f"{chapter_type_block}\n"
@@ -151,7 +145,9 @@ class Generator(BaseAgent):
             f"# 写作自检（Planner 标注的风险扫描 —— 本章必须主动规避）\n\n"
             f"{self_check_block}\n"
             f"\n"
-            f"# 通用写作风格规范\n\n"
+            f"# 创作铁律（剧情逻辑红线，违反必被 Evaluator 抓）\n\n"
+            + writing_iron_laws
+            + f"\n\n# 通用写作风格规范\n\n"
             + writing_style_core
             + f"\n\n# 题材特有风格补充（由 setting 注入）\n\n"
             + writing_style_extra

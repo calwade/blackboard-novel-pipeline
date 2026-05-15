@@ -3,6 +3,7 @@
 Reads:
   - state/chapters/ch{N:03d}.md
   - state/chapters/ch{N:03d}.verdict.json (top_3_fixes + hit landmines)
+  - rules/writing-iron-laws.md   (7 core writing iron laws — same red lines as Generator)
   - rules/writing-style-core.md  + state/writing-style-extra.md
 
 Writes (overwrites):
@@ -32,6 +33,7 @@ class Fixer(BaseAgent):
         verdict = bb.read_json(verdict_path)
         style_core = self._read_rule("writing-style-core.md")
         style_extra = bb.read_text("writing-style-extra.md")
+        writing_iron_laws = self._read_rule("writing-iron-laws.md")
 
         try:
             setting = bb.read_yaml("setting.yaml")
@@ -48,6 +50,7 @@ class Fixer(BaseAgent):
             f"state/{verdict_path}",
             "state/writing-style-extra.md",
             "state/setting.yaml",
+            "rules/writing-iron-laws.md",
             "rules/writing-style-core.md",
         ]
 
@@ -89,7 +92,9 @@ class Fixer(BaseAgent):
             "   正文是 ground truth，不得反向回修过去章节。\n"
             "\n"
             "# 写作风格（你的基准，回答时别写成 AI 味）\n\n"
-            "## 通用规范\n\n"
+            "## 创作铁律（修正时不能违反——这是 Evaluator 同款红线）\n\n"
+            + writing_iron_laws
+            + "\n\n## 通用规范\n\n"
             + style_core
             + "\n\n## 题材特有风格（setting 注入）\n\n"
             + style_extra
