@@ -76,6 +76,41 @@ def test_skeleton_constant_has_all_required_sections():
         assert section in STATUS_CARD_SKELETON
 
 
+def test_skeleton_hooks_section_is_pointer_not_table():
+    """2026-05-15 解耦：『当前活跃伏笔』段不再维护伏笔表（与 pending_hooks.md
+    职能 100% 重叠），改为一行指针。HookKeeper 是权威来源。"""
+    # 段标题保留（让作者知道伏笔在哪查）
+    assert "## 当前活跃伏笔" in STATUS_CARD_SKELETON
+    # 指向 pending_hooks.md 的指针存在
+    assert "pending_hooks.md" in STATUS_CARD_SKELETON
+    # 旧的伏笔表表头（预期回收窗口 / 待推进 等）已删除
+    # （注：『下一章任务卡』里『建议推进的伏笔 | (hook_id 列表)』保留，是给
+    # Planner 的引用提示，不是登记本身。）
+    assert "预期回收窗口" not in STATUS_CARD_SKELETON
+    assert "待推进/推进中/待回收" not in STATUS_CARD_SKELETON
+    # 旧伏笔表 6 列表头（hook_id | 起始章 | 类型 | 当前状态 | 最近推进 | 预期回收窗口）
+    # 整行已删除
+    assert "起始章 | 类型 | 当前状态" not in STATUS_CARD_SKELETON
+    # 提取『当前活跃伏笔』段验证段内不再有 6 列伏笔表
+    start = STATUS_CARD_SKELETON.find("## 当前活跃伏笔")
+    end = STATUS_CARD_SKELETON.find("## 下一章任务卡")
+    section = STATUS_CARD_SKELETON[start:end]
+    assert "hook_id" not in section, (
+        "『当前活跃伏笔』段内仍有 hook_id 表头——应已替换为指针"
+    )
+
+
+def test_system_prompt_delegates_hooks_to_hookkeeper(bb):
+    """system prompt 必须明确说明伏笔由 HookKeeper 接管，本卡不再登记。"""
+    bb.write_text("chapters/ch001.md", "# 第一章\n正文")
+    system, _, _ = StatusCardUpdater()._build_prompts(bb, chapter=1)
+    assert "HookKeeper" in system
+    assert "pending_hooks.md" in system
+    # 旧的『本章新埋的未回收伏笔 → 加新行』已删除
+    assert "新埋的未回收伏笔" not in system
+    assert "从表中删除" not in system
+
+
 # -------- output handling --------
 
 def test_handle_output_strips_markdown_fences(bb):

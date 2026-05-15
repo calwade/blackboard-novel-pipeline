@@ -113,3 +113,53 @@ def test_character_guard_handles_bad_json_gracefully(bb, monkeypatch):
     assert "CharacterGuard 补丁" in patch
     assert "-1" in patch
     assert "命中数**：0" in patch
+
+
+def test_character_guard_truncates_summaries_when_cast_absent(bb):
+    """ch30 + 无 cast → 只读最近 5 章 summaries（ch25-29），不是全部 29 份。
+
+    历史 bug：旧实现 `for n in range(1, chapter)` 把全部历史摘要拼进 prompt，
+    ch30+ 时单 LLM 调用就吞 25K+ tokens。2026-05-15 解耦：
+    - cast 存在 → 不读 summaries（cast 是更高密度的先例库）
+    - cast 不存在 → 仅读最近 5 章 summaries（窗口化）
+    """
+    # 准备 ch1..ch29 的 summaries 和 ch30 的正文（无 cast）
+    for n in range(1, 30):
+        bb.write_text(f"summaries/ch{n:03d}.md", f"第 {n} 章摘要内容。")
+    bb.write_text("chapters/ch030.md", "# 第 30 章\n正文。")
+
+    _, user, inputs = CharacterGuard()._build_prompts(bb, chapter=30)
+
+    summary_inputs = [p for p in inputs if "summaries/" in p]
+    # 只应有 ch25..ch29 共 5 份
+    assert len(summary_inputs) == 5, (
+        f"expected 5 summaries (ch25-29), got {len(summary_inputs)}: {summary_inputs}"
+    )
+    expected = {f"state/summaries/ch{n:03d}.md" for n in range(25, 30)}
+    assert set(summary_inputs) == expected
+    # ch01..ch24 必须不在 inputs / user
+    for n in (1, 5, 10, 20, 24):
+        assert f"state/summaries/ch{n:03d}.md" not in inputs
+        assert f"第 {n} 章摘要内容。" not in user
+    # ch29 必须在 user（窗口边界）
+    assert "第 29 章摘要内容。" in user
+
+
+def test_character_guard_skips_summaries_when_cast_present(bb):
+    """cast 存在 → 不读任何 summaries（cast 是更高密度先例库，summaries 冗余）。"""
+    bb.write_yaml(
+        "characters-cast.yaml",
+        {"schema_version": 1, "last_updated_chapter": 9, "cast": []},
+    )
+    for n in range(1, 10):
+        bb.write_text(f"summaries/ch{n:03d}.md", f"第 {n} 章摘要内容。")
+    bb.write_text("chapters/ch010.md", "# 第 10 章\n正文。")
+
+    _, user, inputs = CharacterGuard()._build_prompts(bb, chapter=10)
+
+    summary_inputs = [p for p in inputs if "summaries/" in p]
+    assert summary_inputs == [], (
+        f"cast present should disable summaries reading, got: {summary_inputs}"
+    )
+    # 但 cast 必须读
+    assert "state/characters-cast.yaml" in inputs

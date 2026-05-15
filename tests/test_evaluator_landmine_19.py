@@ -93,9 +93,11 @@ def test_landmine_19_definition_present():
 
 
 def test_evaluator_prompt_embeds_landmine_19(tmp_path):
-    """End-to-end: the Evaluator system prompt must (a) carry the full
-    landmine_19 definition from the rules file and (b) instruct the LLM to
-    include landmine_19 in its JSON output.
+    """End-to-end: the Evaluator prompt must (a) carry the full
+    landmine_19 definition from the rules file (now in the user prompt's
+    『19 个雷点完整定义』 block) and (b) instruct the LLM to include
+    landmine_19 in its JSON output (in the system prompt's format directive
+    and the user prompt's schema).
 
     Regression guard: if evaluator.py's hardcoded count reverts to 18, or if
     the rules file loses landmine_19, the LLM will omit landmine_19 in its
@@ -103,31 +105,36 @@ def test_evaluator_prompt_embeds_landmine_19(tmp_path):
     """
     b = _seed_minimum(tmp_path)
 
-    system, _user, _inputs = Evaluator()._build_prompts(b, chapter=1)
+    system, user, _inputs = Evaluator()._build_prompts(b, chapter=1)
 
-    # Full landmine_19 definition is stitched into the prompt via the
-    # '# 参考：N 个雷点（完整列表）' block.
-    assert "landmine_19" in system, (
-        "Evaluator system prompt does not contain 'landmine_19' — either the "
+    # Full landmine_19 definition is stitched into the user prompt via the
+    # '# 19 个雷点完整定义' block (system prompt was slimmed in 2026-05-15
+    # decoupling pass; the bulky rules text now lives in user prompt).
+    assert "landmine_19" in user, (
+        "Evaluator prompt does not contain 'landmine_19' — either the "
         "rules file wasn't read or landmine_19 has been deleted from it."
     )
 
-    # JSON-schema directive: total count must be 19, not 18.
+    # JSON-schema directive: total count must be 19, not 18. The system
+    # prompt's format section keeps a brief "19 个 landmine_N" mention; the
+    # user prompt's schema explicitly enumerates landmine_1..landmine_19.
     assert "19 个 landmine_N" in system, (
         "Evaluator system prompt's JSON-schema directive still says a count "
         "other than '19 个 landmine_N' — update the hardcoded count in "
         "evaluator.py's system-prompt string."
     )
-
-    # Anti-regression: no lingering '18 个 landmine_N' in the prompt.
-    assert "18 个 landmine_N" not in system, (
-        "Evaluator system prompt still contains '18 个 landmine_N' — the "
-        "old hardcoded count is leaking into the prompt alongside the new one."
+    assert "landmine_19" in user, (
+        "Evaluator user prompt's JSON schema must enumerate up to landmine_19."
     )
 
-    # Title keyword from the rules file must survive the rule-text concat.
-    assert ("因果颠倒归因" in system) or ("记错功劳" in system), (
-        "landmine_19's title keyword is missing from the assembled system "
+    # Anti-regression: no lingering '18 个 landmine_N' in either prompt.
+    assert "18 个 landmine_N" not in system
+    assert "18 个 landmine_N" not in user
+
+    # Title keyword from the rules file must survive the rule-text concat
+    # (now embedded in user prompt).
+    assert ("因果颠倒归因" in user) or ("记错功劳" in user), (
+        "landmine_19's title keyword is missing from the assembled "
         "prompt — confirm _read_rule('landmines.md') returns the updated "
         "file contents."
     )

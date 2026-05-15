@@ -53,9 +53,17 @@ class CharacterGuard(BaseAgent):
             cast_yaml = bb.read_text("characters-cast.yaml")
             inputs_read.append("state/characters-cast.yaml")
 
-        # Gather all prior summaries for consistency check
+        # Summaries 窗口化（2026-05-15 解耦）
+        # cast 启用时 cast.yaml 已经是更高密度的『先例库』，summaries 冗余 → 不读
+        # cast 缺失时退回旧行为，但只取最近 5 章避免 ch30+ 时 prompt 过载（25K+ tokens）
+        if cast_yaml is not None:
+            summary_chapters: list[int] = []
+        else:
+            start = max(1, chapter - 5)
+            summary_chapters = list(range(start, chapter))
+
         prior_summaries_parts = []
-        for n in range(1, chapter):
+        for n in summary_chapters:
             p = f"summaries/ch{n:03d}.md"
             if bb.exists(p):
                 prior_summaries_parts.append(f"### 第 {n} 章摘要\n" + bb.read_text(p))

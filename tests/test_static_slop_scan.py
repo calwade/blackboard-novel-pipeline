@@ -133,12 +133,29 @@ def test_scan_ch026_regression():
 
 
 def test_thresholds_documented():
-    """landmines.md 必须列出 4 个子雷 (18a-18d)."""
-    text = (config.RULES_DIR / "landmines.md").read_text(encoding="utf-8")
-    assert "子雷 18a" in text
-    assert "子雷 18b" in text
-    assert "子雷 18c" in text
-    assert "子雷 18d" in text
+    """4 个 AI 节奏阈值定义在 ai-rhythm-taboos.md 中。
+
+    历史：阈值原本以子雷 18a-18d 形式写在 landmines.md，与 ai-rhythm-taboos.md
+    形成职能重叠。2026-05-15 解耦：landmines.md 改为指向 ai-rhythm-taboos.md
+    的一行指针，单一权威源在 ai-rhythm-taboos.md。
+    """
+    taboos = (config.RULES_DIR / "ai-rhythm-taboos.md").read_text(encoding="utf-8")
+    # 4 类阈值都必须在 ai-rhythm-taboos.md 里有具体阈值数字
+    assert "不是 X，是 Y" in taboos or "否定对比" in taboos
+    assert "破折号" in taboos
+    assert "短段" in taboos or "<30 字" in taboos
+    assert "明喻" in taboos or "像 X" in taboos
+
+    # landmines.md 里现在只放指针，不再列子雷 18a-18d
+    landmines = (config.RULES_DIR / "landmines.md").read_text(encoding="utf-8")
+    assert "ai-rhythm-taboos.md" in landmines, (
+        "landmines.md should point to ai-rhythm-taboos.md for the 4 thresholds"
+    )
+    # 子雷段已删除（避免与 ai-rhythm-taboos.md 重复）
+    assert "子雷 18a" not in landmines
+    assert "子雷 18b" not in landmines
+    assert "子雷 18c" not in landmines
+    assert "子雷 18d" not in landmines
 
 
 def test_writing_style_core_has_new_taboos():
