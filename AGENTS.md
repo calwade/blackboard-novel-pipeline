@@ -275,16 +275,20 @@ python -m src.genre_extractor.miners.novel_dna <preset_id> novels/a.txt novels/b
 
 规则分两层：通用（`rules/`）+ 作品目录内的题材特有文件（经 bootstrap 拷入 `state/`）。每个 Agent 只加载它需要的那 1-2 份。
 
-| 文件 | 类型 | 谁用 |
-|---|---|---|
-| `rules/00-information-priority.md` | 通用 | Evaluator、Fixer（引用） |
-| `rules/iron-laws.md` | 通用 | Evaluator |
-| `rules/landmines.md` | 通用 | Evaluator（全）、AISlopGuard（AI 味子集） |
-| `rules/writing-style-core.md` | 通用 | Generator、Fixer |
-| `state/iron-laws-extra.md` | 题材（本书专属） | Evaluator |
-| `state/writing-style-extra.md` | 题材（本书专属） | Generator、Fixer |
-| `state/era.md` | 题材（本书专属） | Generator |
-| `state/characters.yaml` | 作品（本书专属） | 所有 Agent |
+每份文件单一职责、互斥不重叠：
+
+| 文件 | 一句话职责 | 类型 | 谁用 |
+|---|---|---|---|
+| `rules/00-information-priority.md` | 多源信息冲突仲裁协议 | 通用 | Evaluator、Fixer（引用） |
+| `rules/iron-laws.md` | Evaluator 28 条判稿 rubric | 通用 | Evaluator |
+| `rules/landmines.md` | Evaluator 19 条雷点症状对照 | 通用 | Evaluator（全）、AISlopGuard（AI 味子集） |
+| `rules/writing-iron-laws.md` | Generator/Fixer 写作前 19 条剧情红线核查表 | 通用 | Generator、Fixer |
+| `rules/writing-style-core.md` | 通用句段词描写技法手册 | 通用 | Generator、Fixer |
+| `rules/ai-rhythm-taboos.md` | AI 节奏 4 阈值唯一权威 | 通用 | Generator（尾部）+ 引用 |
+| `state/iron-laws-extra.md` | 题材特有铁律 | 题材（本书专属） | Evaluator |
+| `state/writing-style-extra.md` | 题材特有风格 | 题材（本书专属） | Generator、Fixer |
+| `state/era.md` | 题材事实包 | 题材（本书专属） | Generator |
+| `state/characters.yaml` | 本书人物档案 | 作品（本书专属） | 所有 Agent |
 
 ## 故障排查
 

@@ -30,9 +30,8 @@
 
 ## iron_law_5: 拒绝 AI 味
 
-禁用固定句式、堆砌形容词、「了」字过度、机械排比；多用动词和名词，少用形容词。
-❌ 「他的心中充满了无尽的愤怒与悲伤，眼角默默地流下了一滴晶莹的泪水，然后他慢慢抬起手来，轻轻地擦去了它。」
-✅ 「他摸到烟盒空了，把空盒捏成一团，扔进墙角那堆烟头里。」
+> 本条已迁移到 `rules/ai-rhythm-taboos.md`（4 阈值定量）+ `rules/landmines.md` landmine_18（症状清单）。
+> ID 保留以维持 Evaluator verdict schema 稳定，避免 verdict.json / issues.jsonl 的字段断裂。
 
 ## iron_law_6: 梗的时代感
 

@@ -1,19 +1,31 @@
-"""Tests for the writing-iron-laws.md decoupling (Oracle audit A4).
+"""Tests for the writing-iron-laws.md decoupling (Oracle audit A4 + D5).
 
 Background: Generator's system prompt used to embed a 7-question "动笔前自问 7 问"
-section that was a paraphrased restatement of 7 iron laws (7/8/9/13/24/25/27).
-Generator did not read iron-laws.md, so any change to iron-laws.md silently
-drifted from Generator's prompt — a rule-drift source.
+section that was a paraphrased restatement of 7 iron laws. Generator did not
+read iron-laws.md, so any change to iron-laws.md silently drifted from
+Generator's prompt — a rule-drift source.
 
-Fix: extract those 7 laws verbatim into rules/writing-iron-laws.md; both
-Generator and Fixer read it; Evaluator continues reading the full iron-laws.md.
+Fix (D5, commit 664c454): extract those 7 laws verbatim into
+rules/writing-iron-laws.md; both Generator and Fixer read it; Evaluator
+continues reading the full iron-laws.md.
+
+Fix (D5 expansion): the 7-law subset was incomplete (Generator still relied
+on writing-style-core.md for psychology/Show-Don't-Tell, mixing concerns).
+Now expanded to 19 laws (1, 2, 3, 4, 6, 7, 8, 9, 10, 13, 18, 19, 20, 22, 23,
+24, 25, 27, 28). writing-style-core.md slimmed to pure technique manual.
 
 These tests lock in:
-  1. The new file exists and lists exactly the expected 7 iron law IDs in order.
-  2. Each entry's content matches iron-laws.md byte-for-byte (no semantic drift).
+  1. The new file exists and lists exactly the 19 expected iron law IDs.
+  2. Each entry's content matches iron-laws.md byte-for-byte (no drift).
+     Exception: iron_law_2 has an extended Show-Don't-Tell example library
+     appended; we verify the iron-laws.md original text is *contained* within
+     the writing-iron-laws.md block.
   3. Generator's system prompt loads + advertises the new file.
   4. The old "动笔前自问 7 问" section is gone (anti-regression).
   5. Fixer also loads + advertises the new file.
+  6. writing-style-core.md no longer carries psychology / Show-Don't-Tell
+     (now pure technique manual, < 60 lines).
+  7. iron-laws.md iron_law_5 is now a pointer (already migrated).
 """
 from __future__ import annotations
 
@@ -28,7 +40,7 @@ from src.agents.generator import Generator
 from src.agents.fixer import Fixer
 
 
-EXPECTED_IDS = [7, 8, 9, 13, 24, 25, 27]
+EXPECTED_IDS = [1, 2, 3, 4, 6, 7, 8, 9, 10, 13, 18, 19, 20, 22, 23, 24, 25, 27, 28]
 
 
 def _extract_iron_law(filepath: Path, n: int) -> str:
@@ -43,7 +55,7 @@ def _extract_iron_law(filepath: Path, n: int) -> str:
     if not m:
         raise AssertionError(f"iron_law_{n} heading not found in {filepath}")
     start = m.start()
-    # Find next ## heading
+    # Find next ## heading (top-level, not ### sub-heading)
     next_m = re.search(r"^## ", text[m.end():], re.MULTILINE)
     end = m.end() + next_m.start() if next_m else len(text)
     return text[start:end].rstrip()
@@ -51,7 +63,7 @@ def _extract_iron_law(filepath: Path, n: int) -> str:
 
 # ---------- file existence + structure ----------
 
-def test_writing_iron_laws_file_exists_and_has_7_laws():
+def test_writing_iron_laws_file_exists_and_has_19_laws():
     p = config.RULES_DIR / "writing-iron-laws.md"
     assert p.exists(), "rules/writing-iron-laws.md must exist as Generator/Fixer's iron-law subset"
     text = p.read_text(encoding="utf-8")
@@ -62,11 +74,17 @@ def test_writing_iron_laws_file_exists_and_has_7_laws():
 
 
 def test_writing_iron_laws_content_matches_iron_laws_md():
-    """Each of the 7 entries must match iron-laws.md byte-for-byte.
-    This is the anti-drift guarantee: change one side, the other must follow."""
+    """Each entry (except iron_law_2) must match iron-laws.md byte-for-byte.
+    This is the anti-drift guarantee: change one side, the other must follow.
+
+    iron_law_2 is special-cased: writing-iron-laws.md adds an "扩展示例库" section
+    after the iron-laws.md original, so we use a `contains` check for that one.
+    """
     src = config.RULES_DIR / "iron-laws.md"
     dst = config.RULES_DIR / "writing-iron-laws.md"
     for n in EXPECTED_IDS:
+        if n == 2:
+            continue  # special-cased below
         src_block = _extract_iron_law(src, n)
         dst_block = _extract_iron_law(dst, n)
         assert src_block == dst_block, (
@@ -74,6 +92,31 @@ def test_writing_iron_laws_content_matches_iron_laws_md():
             f"--- iron-laws.md ---\n{src_block}\n"
             f"--- writing-iron-laws.md ---\n{dst_block}\n"
             f"Re-copy the block from iron-laws.md to keep them in sync."
+        )
+
+
+def test_iron_law_2_contains_iron_laws_md_original_plus_extended_examples():
+    """iron_law_2 in writing-iron-laws.md has an extended Show-Don't-Tell
+    example library appended (moved from writing-style-core.md). Verify:
+      - The iron-laws.md original text is *contained* (no drift in the prefix).
+      - The extended section header "扩展示例库" exists.
+      - The 6 extended example categories all appear.
+    """
+    src = config.RULES_DIR / "iron-laws.md"
+    dst = config.RULES_DIR / "writing-iron-laws.md"
+    src_block = _extract_iron_law(src, 2)
+    dst_block = _extract_iron_law(dst, 2)
+    # The iron-laws.md version must be contained verbatim in the writing-iron-laws.md version
+    assert src_block in dst_block, (
+        f"iron_law_2 in writing-iron-laws.md no longer contains the iron-laws.md original.\n"
+        f"--- iron-laws.md ---\n{src_block}\n"
+        f"--- writing-iron-laws.md ---\n{dst_block}\n"
+    )
+    assert "扩展示例库" in dst_block, "iron_law_2 missing '扩展示例库' header"
+    # Six example categories migrated from writing-style-core.md
+    for category in ("愤怒", "恐惧", "强大", "贫穷", "在场感", "时间流逝"):
+        assert category in dst_block, (
+            f"iron_law_2 extended example library missing '{category}' category"
         )
 
 
@@ -105,11 +148,14 @@ def bb(tmp_path: Path) -> Blackboard:
 def test_generator_system_prompt_includes_writing_iron_laws(bb):
     system, _, _ = Generator()._build_prompts(bb, chapter=1)
     assert "创作铁律" in system, "Generator system prompt missing '创作铁律' header"
-    # Pick two distinctive landmarks from the iron laws subset
+    # Pick distinctive landmarks from the iron laws subset
     assert "iron_law_8" in system, "Generator system prompt missing iron_law_8 marker"
     assert "反派不能降智" in system, "Generator system prompt missing iron_law_8 content"
     assert "iron_law_25" in system, "Generator system prompt missing iron_law_25 marker"
     assert "反派信息越界禁令" in system, "Generator system prompt missing iron_law_25 content"
+    # Newly-added laws (D5 expansion 7→19)
+    assert "iron_law_2" in system, "Generator system prompt missing iron_law_2 (Show-Don't-Tell)"
+    assert "iron_law_18" in system, "Generator system prompt missing iron_law_18 (五感代入)"
 
 
 def test_generator_no_longer_has_seven_questions(bb):
@@ -163,4 +209,68 @@ def test_fixer_inputs_read_includes_writing_iron_laws(fixer_bb):
     _, _, inputs = Fixer()._build_prompts(fixer_bb, chapter=1)
     assert "rules/writing-iron-laws.md" in inputs, (
         "Fixer must advertise reading rules/writing-iron-laws.md in inputs_read"
+    )
+
+
+# ---------- writing-style-core.md slimming (D5 expansion) ----------
+
+def test_writing_style_core_no_longer_has_show_dont_tell_section():
+    """Anti-regression: the 'Show-Don't-Tell 铁律' section (with 6 examples)
+    was moved to writing-iron-laws.md iron_law_2's extended example library.
+    writing-style-core.md must not still carry it (would create a duplicate
+    that drifts independently)."""
+    text = (config.RULES_DIR / "writing-style-core.md").read_text(encoding="utf-8")
+    assert "Show-Don't-Tell 铁律" not in text, (
+        "writing-style-core.md still has the 'Show-Don't-Tell 铁律' section heading. "
+        "It was moved to rules/writing-iron-laws.md iron_law_2 — delete the duplicate."
+    )
+    # The 6 example category headings should not all appear together as
+    # standalone "### 愤怒" / "### 恐惧" sections (those moved to writing-iron-laws.md).
+    triplet_pattern = re.compile(r"^### 愤怒\s*$.*?^### 恐惧\s*$", re.MULTILINE | re.DOTALL)
+    assert not triplet_pattern.search(text), (
+        "writing-style-core.md still has the 6-example Show-Don't-Tell block "
+        "(### 愤怒 / ### 恐惧 / ...). Those moved to writing-iron-laws.md."
+    )
+
+
+def test_writing_style_core_no_longer_has_six_step_psychology():
+    """Anti-regression: the '六步人物心理分析' and '代入感六大支柱' sections
+    were author-meta methodology, not technique. Removed in D5 expansion."""
+    text = (config.RULES_DIR / "writing-style-core.md").read_text(encoding="utf-8")
+    assert "六步人物心理分析" not in text, (
+        "writing-style-core.md still has '六步人物心理分析' section. "
+        "It is author-meta methodology and was removed in D5 expansion."
+    )
+    assert "代入感六大支柱" not in text, (
+        "writing-style-core.md still has '代入感六大支柱' section. "
+        "Removed in D5 expansion to keep core a pure technique manual."
+    )
+
+
+def test_writing_style_core_is_under_60_lines():
+    """writing-style-core.md should be a thin technique manual.
+    Hard cap: 60 lines. If you need to add more, ask whether the new
+    content really belongs here vs. writing-iron-laws.md / ai-rhythm-taboos.md."""
+    text = (config.RULES_DIR / "writing-style-core.md").read_text(encoding="utf-8")
+    line_count = text.count("\n") + (0 if text.endswith("\n") else 1)
+    assert line_count < 60, (
+        f"writing-style-core.md has {line_count} lines, must be < 60. "
+        f"It should be句段词描写技法 only — psychology / Show-Don't-Tell / "
+        f"AI-rhythm阈值 belong elsewhere."
+    )
+
+
+# ---------- iron-laws.md iron_law_5 pointer (D5 expansion) ----------
+
+def test_iron_law_5_is_pointer():
+    """iron_law_5 (拒绝 AI 味) was migrated to ai-rhythm-taboos.md (4 阈值)
+    + landmine_18 (症状清单). The ID is kept to preserve Evaluator
+    verdict.json schema stability, but the body must point to the new home."""
+    block = _extract_iron_law(config.RULES_DIR / "iron-laws.md", 5)
+    assert "已迁移" in block, "iron_law_5 should be a pointer ('已迁移' marker missing)"
+    assert "ai-rhythm-taboos.md" in block, (
+        "iron_law_5 pointer must reference ai-rhythm-taboos.md (the 4-threshold authority)"
+    )
+    assert "landmine_18" in block, (
+        "iron_law_5 pointer must reference landmine_18 (the AI-rhythm symptom list)"
     )

@@ -3,8 +3,8 @@
 Reads:
   - state/chapters/ch{N:03d}.md
   - state/chapters/ch{N:03d}.verdict.json (top_3_fixes + hit landmines)
-  - rules/writing-iron-laws.md   (7 core writing iron laws — same red lines as Generator)
-  - rules/writing-style-core.md  + state/writing-style-extra.md
+  - rules/writing-iron-laws.md   (19 writing iron laws — same red lines as Generator)
+  - rules/writing-style-core.md  (句段词描写技法手册) + state/writing-style-extra.md
 
 Writes (overwrites):
   - state/chapters/ch{N:03d}.md

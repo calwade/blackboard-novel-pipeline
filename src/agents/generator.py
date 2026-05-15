@@ -6,9 +6,9 @@ Reads (all genre content comes from the active setting pack via state/):
   - state/setting.yaml                     — active setting metadata
   - state/era.md                           — setting's world/era facts
   - state/writing-style-extra.md           — setting-specific style quirks
-  - rules/writing-iron-laws.md             — 7 core writing iron laws (subset of iron-laws.md)
-  - rules/writing-style-core.md            — universal style rules
-  - rules/ai-rhythm-taboos.md              — hard taboos, appended last (conflict arbitration)
+  - rules/writing-iron-laws.md             — 19 writing iron laws (subset of iron-laws.md, plot-logic red lines)
+  - rules/writing-style-core.md            — 句段词描写技法手册 (technique manual, not rules)
+  - rules/ai-rhythm-taboos.md              — AI-rhythm 4-threshold authority, appended last (conflict arbitration)
   - state/summaries/ch{N-1}.md             — continuity from prior chapter
 
 Writes:
