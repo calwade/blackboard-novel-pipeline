@@ -49,6 +49,14 @@ class PlotMilestone:
     force_chapter_type:   可选，命中本章时 Planner 强制此 chapter_type
     force_advances:       可选，scenes[].advances 至少含其中之一
     beat:                 ≥1 句话描述本章必须兑现的奇观时刻（Evaluator 据此审核）
+    payoff_recipe_ref:    可选，指向 dna_structured.yaml 的 recipe key。
+                          形式：
+                            - "<anchor>"                  → 仅锚 anchor，取通用配方
+                            - "<anchor>.<pattern_name>"   → 精确指向 villain_defeat_patterns
+                                                            里某条 pattern（如『爽感.信息差打脸』）
+                          anchor 必须 ∈ VALID_ANCHORS。pattern_name 自由文本，
+                          运行期 Planner 会去 dna_structured.yaml 查表，找不到则降级
+                          为只用 payoff_recipes[anchor] 的配方。
     """
 
     chapter: int
@@ -57,6 +65,7 @@ class PlotMilestone:
     force_chapter_type: Optional[str] = None
     force_advances: list[str] = field(default_factory=list)
     beat: str = ""
+    payoff_recipe_ref: Optional[str] = None
 
 
 @dataclass
@@ -223,6 +232,35 @@ def read_plot_arc(project_or_state_dir: Path) -> Optional[PlotArc]:
                         f"plot_arc.yaml: acts[{i}].milestones[{j}].force_advances element "
                         f"{adv!r} must be one of {VALID_ADVANCES}"
                     )
+            # P3 续：payoff_recipe_ref 校验。格式必须是 "<anchor>" 或 "<anchor>.<pattern>"
+            ms_recipe_ref = m.get("payoff_recipe_ref")
+            if ms_recipe_ref is not None:
+                if not isinstance(ms_recipe_ref, str) or not ms_recipe_ref.strip():
+                    raise ValueError(
+                        f"plot_arc.yaml: acts[{i}].milestones[{j}].payoff_recipe_ref "
+                        f"must be a non-empty string, got {ms_recipe_ref!r}"
+                    )
+                # 至少一段，最多两段（anchor 或 anchor.pattern）
+                parts = ms_recipe_ref.split(".", 1)
+                if len(parts) == 0 or len(parts) > 2:
+                    raise ValueError(
+                        f"plot_arc.yaml: acts[{i}].milestones[{j}].payoff_recipe_ref "
+                        f"format invalid; expected '<anchor>' or '<anchor>.<pattern>', "
+                        f"got {ms_recipe_ref!r}"
+                    )
+                anchor_part = parts[0].strip()
+                if anchor_part not in VALID_ANCHORS:
+                    raise ValueError(
+                        f"plot_arc.yaml: acts[{i}].milestones[{j}].payoff_recipe_ref "
+                        f"anchor part {anchor_part!r} must be one of {VALID_ANCHORS}"
+                    )
+                # pattern part 可以是任意非空字符串（DNA tipsfile 里的具体 pattern key）
+                if len(parts) == 2 and not parts[1].strip():
+                    raise ValueError(
+                        f"plot_arc.yaml: acts[{i}].milestones[{j}].payoff_recipe_ref "
+                        f"pattern part is empty after dot in {ms_recipe_ref!r}"
+                    )
+
             milestones.append(
                 PlotMilestone(
                     chapter=ms_chapter,
@@ -231,6 +269,7 @@ def read_plot_arc(project_or_state_dir: Path) -> Optional[PlotArc]:
                     force_chapter_type=ms_force_ct,
                     force_advances=list(ms_force_adv),
                     beat=ms_beat,
+                    payoff_recipe_ref=ms_recipe_ref,
                 )
             )
 

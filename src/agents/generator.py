@@ -68,6 +68,15 @@ class Generator(BaseAgent):
         dna_tips_block, dna_tips_inputs = _read_dna_tips(bb, for_agent="generator")
         inputs_read.extend(dna_tips_inputs)
 
+        # P3：milestone 章节专属 payoff_recipes 注入。
+        # 如果本章是 plot_arc.yaml 配置的 milestone，从 dna_structured.yaml 拉
+        # 对应 anchor 的完整 recipe（formula + dialog_template + sample_50_chars），
+        # 让 Generator 写正文时直接照抄对话节奏与工艺链。
+        milestone_recipe_block, milestone_recipe_inputs = _read_milestone_recipe_for_generator(
+            bb, chapter
+        )
+        inputs_read.extend(milestone_recipe_inputs)
+
         prior_summary = ""
         if chapter >= 2:
             p = f"summaries/ch{chapter-1:03d}.md"
@@ -154,6 +163,7 @@ class Generator(BaseAgent):
             + f"\n\n# 时代/世界观事实包（仅供融入场景，严禁整段复述）\n\n"
             + era
             + (f"\n\n{dna_tips_block}" if dna_tips_block else "")
+            + (f"\n\n{milestone_recipe_block}" if milestone_recipe_block else "")
             + "\n\n# ⚠ 最终硬规则（冲突仲裁：与上文冲突时以此为准）\n\n"
             + ai_rhythm_taboos
         )
@@ -276,3 +286,178 @@ def _format_self_check(self_check: dict) -> str:
     lines.append("")
     lines.append("**写作原则**：以上任何**非『无』**的提示，都必须在本章正文中显式规避。")
     return "\n".join(lines)
+
+
+# ---------- P3: payoff_recipes injection (milestone-aware) ----------
+
+def _read_milestone_recipe_for_generator(bb, chapter: int) -> tuple[str, list[str]]:
+    """Render the payoff_recipes block (动笔前必读) for Generator.
+
+    行为：
+      1. 读 state/dna_structured.yaml；不存在或无 payoff_recipes 字段 → 返回空。
+      2. 渲染 payoff_recipes 全表（4 个 anchor 的 formula + dialog_template + sample）。
+      3. 若 plot_arc.yaml 存在且 current_chapter 命中某 milestone：
+           - 优先用 milestone.payoff_recipe_ref 解析的具体 recipe（含 villain_defeat_patterns
+             pattern 命中）作为"⚠ 本章必须按此节奏写"的特别强调段
+           - milestone 无 payoff_recipe_ref 时，用 milestone.anchor 取通用 recipe
+      4. 失败 / 全空 → 返回空字符串 + 空 inputs。
+
+    返回 (block_markdown, inputs_read_paths)。
+    """
+    if not bb.exists("dna_structured.yaml"):
+        return "", []
+    try:
+        dna = bb.read_yaml("dna_structured.yaml") or {}
+    except Exception:
+        return "", []
+    if not isinstance(dna, dict):
+        return "", []
+
+    payoff_recipes = dna.get("payoff_recipes") or {}
+    if not isinstance(payoff_recipes, dict) or not payoff_recipes:
+        return "", []
+
+    inputs: list[str] = ["state/dna_structured.yaml"]
+    out: list[str] = []
+    out.append("# 📖 dna 爽点配方（payoff_recipes —— 动笔前必读）")
+    out.append("")
+    out.append(
+        "下面 4 个 anchor 的 recipe 来自源小说 DNA 提取——是本作品里"
+        "**已被验证有效**的爽点工艺链。写到对应类型场景时，按 dialog_template "
+        "的 speaker × beats 节奏推进，不要凭空发挥。"
+    )
+    out.append("")
+
+    def _render_recipe(anchor: str, recipe: dict, *, emphasized: bool = False) -> list[str]:
+        sub: list[str] = []
+        head = f"## {anchor} 配方" + ("（⚠ 本章重点）" if emphasized else "")
+        sub.append(head)
+        sub.append("")
+        formula = (recipe.get("formula") or "").strip()
+        if formula:
+            sub.append(f"- 工艺链：{formula}")
+        dlg = recipe.get("dialog_template") or []
+        if isinstance(dlg, list) and dlg:
+            sub.append("- 对话剧本（speaker × beats）：")
+            for step in dlg:
+                if not isinstance(step, dict):
+                    continue
+                speaker = str(step.get("speaker", "?"))
+                beats = step.get("beats") or []
+                if isinstance(beats, list):
+                    beats_str = " / ".join(str(b) for b in beats)
+                else:
+                    beats_str = str(beats)
+                sub.append(f"  - {speaker}: {beats_str}")
+        sample = (recipe.get("sample_50_chars") or "").strip()
+        if sample:
+            sample_one_line = sample.replace("\n", " ")
+            sub.append(f"- 50-100 字样本：{sample_one_line}")
+        sub.append("")
+        return sub
+
+    # 全 4 个 anchor 默认全渲染（即便某些 anchor 是空 dict，也会被 _render_recipe 跳过空字段）
+    canonical_order = ("爽感", "掌控感", "黑色幽默", "生存智慧")
+    for anchor in canonical_order:
+        recipe = payoff_recipes.get(anchor)
+        if isinstance(recipe, dict) and (
+            recipe.get("formula") or recipe.get("dialog_template") or recipe.get("sample_50_chars")
+        ):
+            out.extend(_render_recipe(anchor, recipe))
+
+    # 也把 LLM 输出里偏离 4 anchor 的额外 key（罕见）加上
+    for anchor, recipe in payoff_recipes.items():
+        if anchor in canonical_order:
+            continue
+        if isinstance(recipe, dict) and (
+            recipe.get("formula") or recipe.get("dialog_template") or recipe.get("sample_50_chars")
+        ):
+            out.extend(_render_recipe(anchor, recipe))
+
+    # P3 续：milestone 章节 → 拉 plot_arc.yaml + 在末尾加"本章必须按此 recipe 写"特别强调段
+    milestone_block = _resolve_chapter_milestone_recipe(bb, dna, chapter)
+    if milestone_block:
+        if "state/plot_arc.yaml" not in inputs:
+            inputs.append("state/plot_arc.yaml")
+        out.append("")
+        out.append("---")
+        out.append("")
+        out.append(milestone_block)
+
+    if len(out) <= 4:
+        # 4 行 = header + 1 空行 + 1 描述行 + 1 空行；说明 4 个 anchor 都空且无 milestone
+        return "", []
+
+    return "\n".join(out) + "\n", inputs
+
+
+def _resolve_chapter_milestone_recipe(bb, dna: dict, chapter: int) -> str:
+    """If `chapter` is a milestone (per plot_arc.yaml), render an extra
+    `⚠ 本章必须按此 recipe 写` block. Returns "" otherwise / on any failure.
+    """
+    if not bb.exists("plot_arc.yaml"):
+        return ""
+    try:
+        from src.tools.plot_arc import read_plot_arc, derive_planner_context
+
+        arc = read_plot_arc(bb.root)
+    except Exception:
+        return ""
+    if arc is None:
+        return ""
+    try:
+        ctx = derive_planner_context(arc, chapter)
+    except ValueError:
+        return ""
+    cur_ms = ctx.get("current_milestone")
+    if cur_ms is None:
+        return ""
+
+    # Determine ref: prefer payoff_recipe_ref, fall back to anchor only
+    ref = getattr(cur_ms, "payoff_recipe_ref", None) or cur_ms.anchor
+    from .planner import _resolve_recipe
+
+    recipe = _resolve_recipe(dna, ref)
+    if not recipe:
+        return ""
+
+    out = [
+        f"## ⚠ 本章是 milestone（ch{cur_ms.chapter} · {cur_ms.type}）—— 必须按此 recipe 写正文",
+        "",
+        f"- payoff_recipe_ref：`{ref}`（anchor={recipe['anchor']}"
+        + (f" · pattern={recipe['pattern']}" if recipe.get("pattern") else "")
+        + ")",
+    ]
+    if recipe.get("formula"):
+        out.append(f"- 工艺链：{recipe['formula']}")
+    if recipe.get("setup"):
+        out.append(f"- setup（反派初态）：{recipe['setup']}")
+    if recipe.get("twist"):
+        out.append(f"- twist（破局点）：{recipe['twist']}")
+    if recipe.get("payoff_line_template"):
+        out.append(f"- 主角点评句式模板：{recipe['payoff_line_template']}")
+
+    dlg = recipe.get("dialog_template") or []
+    if dlg:
+        out.append("- 对话剧本（speaker × beats）：")
+        for step in dlg:
+            if not isinstance(step, dict):
+                continue
+            speaker = str(step.get("speaker", "?"))
+            beats = step.get("beats") or []
+            if isinstance(beats, list):
+                beats_str = " / ".join(str(b) for b in beats)
+            else:
+                beats_str = str(beats)
+            out.append(f"  - {speaker}: {beats_str}")
+
+    if recipe.get("sample_50_chars"):
+        out.append(f"- 50-100 字样本：{str(recipe['sample_50_chars']).replace(chr(10), ' ')}")
+
+    out.append("")
+    out.append(
+        "**写本章正文时**：必须有一段≥150 字直接对应工艺链 + dialog_template；"
+        "speaker 轮换节奏要保留；50-100 字样本是**风格锚点**（不是抄句子，"
+        "是抄『句法/节奏/留白方式』）。"
+    )
+    return "\n".join(out)

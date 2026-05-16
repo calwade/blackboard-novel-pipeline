@@ -538,6 +538,14 @@ def _read_plot_arc_block(bb, chapter: int) -> tuple[str, list[str]]:
             f"『本章未在正文兑现 milestone.beat（{cur_ms.anchor} 锚点）即整章失败』"
         )
         lines.append("")
+
+        # P3：milestone 有 payoff_recipe_ref → 拉 dna_structured.yaml 对应 recipe
+        # 注入完整工艺链 + 对话剧本 + 50 字样本，给 Planner 写 plan 时直接照抄。
+        if getattr(cur_ms, "payoff_recipe_ref", None):
+            recipe_block = _render_milestone_recipe(bb, cur_ms.payoff_recipe_ref)
+            if recipe_block:
+                lines.append(recipe_block)
+                lines.append("")
     else:
         nxt_ms = ctx.get("next_milestone")
         dist = ctx.get("chapters_until_next_milestone")
@@ -706,3 +714,140 @@ def _compute_anchor_quota_status(bb, cur_act, chapter: int) -> str:
             "——这些章节实际并未兑现任何 dna value_anchor，应纳入'缺口'考量）"
         )
     return table + "\n".join(note_lines)
+
+
+# ----- P3: milestone payoff_recipe_ref → dna_structured 配方注入 ------------
+
+def _resolve_recipe(dna_structured: dict, ref: str) -> Optional[dict]:
+    """从 dna_structured.yaml 解析 payoff_recipe_ref。
+
+    ref 形式：
+      - "<anchor>"                     → 返回 payoff_recipes[anchor]
+      - "<anchor>.<pattern_name>"      → 优先返回 villain_defeat_patterns 里
+                                          pattern == pattern_name 的项；找不到时
+                                          降级为 payoff_recipes[anchor]
+    返回的 dict 形态：
+      {
+        "anchor": str,
+        "pattern": Optional[str],          # 仅 villain_defeat_patterns 命中时有
+        "formula": str,
+        "dialog_template": list,
+        "sample_50_chars": str,
+        "setup": Optional[str],            # 仅 villain_defeat_patterns 命中时有
+        "twist": Optional[str],
+        "payoff_line_template": Optional[str],
+      }
+    任一失败（dna 为空 / ref 格式错 / key 不存在）→ None。
+    """
+    if not isinstance(dna_structured, dict) or not ref or not isinstance(ref, str):
+        return None
+    parts = ref.split(".", 1)
+    anchor = parts[0].strip()
+    pattern = parts[1].strip() if len(parts) == 2 else None
+    if not anchor:
+        return None
+
+    # 先尝试 villain_defeat_patterns 精确匹配（pattern_name 可能在所有 anchor 共享的 patterns 里）
+    if pattern:
+        vdp = dna_structured.get("villain_defeat_patterns") or []
+        if isinstance(vdp, list):
+            for v in vdp:
+                if not isinstance(v, dict):
+                    continue
+                if str(v.get("pattern", "")).strip() == pattern:
+                    # 同时把 anchor 的通用 formula/dialog_template/sample_50_chars 拉出做 fallback
+                    base = (dna_structured.get("payoff_recipes") or {}).get(anchor) or {}
+                    if not isinstance(base, dict):
+                        base = {}
+                    return {
+                        "anchor": anchor,
+                        "pattern": pattern,
+                        "formula": str(v.get("setup", "") or "")
+                                    + (" → " + str(v.get("twist", "")) if v.get("twist") else "")
+                                    + (" → " + str(v.get("payoff_line_template", "")) if v.get("payoff_line_template") else "")
+                                    or str(base.get("formula", "")),
+                        "dialog_template": base.get("dialog_template") or [],
+                        "sample_50_chars": str(base.get("sample_50_chars", "")),
+                        "setup": str(v.get("setup", "")) or None,
+                        "twist": str(v.get("twist", "")) or None,
+                        "payoff_line_template": str(v.get("payoff_line_template", "")) or None,
+                    }
+
+    # 没有 pattern 或没命中 → 用 payoff_recipes[anchor]
+    pr = dna_structured.get("payoff_recipes") or {}
+    if not isinstance(pr, dict):
+        return None
+    base = pr.get(anchor)
+    if not isinstance(base, dict):
+        return None
+    formula = str(base.get("formula", "") or "")
+    if not formula and not base.get("dialog_template") and not base.get("sample_50_chars"):
+        return None
+    return {
+        "anchor": anchor,
+        "pattern": None,
+        "formula": formula,
+        "dialog_template": base.get("dialog_template") or [],
+        "sample_50_chars": str(base.get("sample_50_chars", "")),
+        "setup": None,
+        "twist": None,
+        "payoff_line_template": None,
+    }
+
+
+def _render_milestone_recipe(bb, ref: str) -> str:
+    """读 dna_structured.yaml + 用 _resolve_recipe 拿到 recipe，渲染成 markdown 段。
+
+    bb 没有 dna_structured.yaml / ref 解析失败 / recipe 全空 → 返回空串。
+    """
+    if not bb.exists("dna_structured.yaml"):
+        return ""
+    try:
+        dna = bb.read_yaml("dna_structured.yaml") or {}
+    except Exception:
+        return ""
+    recipe = _resolve_recipe(dna, ref)
+    if not recipe:
+        return ""
+
+    out = [
+        "## 📖 本章 milestone 对应的 dna 配方",
+        "",
+        f"- 来源：`payoff_recipe_ref = \"{ref}\"`（anchor={recipe['anchor']}"
+        + (f" · pattern={recipe['pattern']}" if recipe.get("pattern") else "")
+        + ")",
+    ]
+    if recipe.get("formula"):
+        out.append(f"- 工艺链：{recipe['formula']}")
+    if recipe.get("setup"):
+        out.append(f"- setup（反派初态）：{recipe['setup']}")
+    if recipe.get("twist"):
+        out.append(f"- twist（破局点）：{recipe['twist']}")
+    if recipe.get("payoff_line_template"):
+        out.append(f"- 主角点评句式模板：{recipe['payoff_line_template']}")
+
+    dlg = recipe.get("dialog_template") or []
+    if dlg:
+        out.append("- 对话剧本（按此 speaker × beats 节奏写）：")
+        for step in dlg:
+            if not isinstance(step, dict):
+                continue
+            speaker = str(step.get("speaker", "?"))
+            beats = step.get("beats") or []
+            if isinstance(beats, list):
+                beats_str = " / ".join(str(b) for b in beats)
+            else:
+                beats_str = str(beats)
+            out.append(f"  - {speaker}: {beats_str}")
+
+    if recipe.get("sample_50_chars"):
+        sample = str(recipe["sample_50_chars"]).strip().replace("\n", " ")
+        out.append(f"- 原作风格 50-100 字样本：{sample}")
+
+    out.append("")
+    out.append(
+        "**写本章 plan 时**：选一个 scene 作为 milestone 兑现位，按上面的"
+        " dialog_template 设计 conflict 场面节奏；scene.sensory_prompts 至少 1 条"
+        "对应『工艺链』里的关键画面（不要只写空泛的『紧张氛围』）。"
+    )
+    return "\n".join(out)
