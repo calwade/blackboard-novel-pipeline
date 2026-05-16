@@ -54,6 +54,17 @@ export function renderTree() {
   const s = state.snapshot;
   if (!s) return;
   const tree = $('#tree');
+
+  // -------- 保存展开状态（按稳定 key 收集，rebuild 后恢复） --------
+  // bug fix: 之前 polling 每 2-4 秒重建 DOM 把 is-open 全清掉，
+  // 用户感受为"展开后过几秒缩回去"。
+  // 用 data-tree-key 作稳定标识符（chapter:N / section:title），
+  // rebuild 后按 key 恢复 is-open 状态。
+  const openKeys = new Set();
+  tree.querySelectorAll('[data-tree-key].is-open').forEach((node) => {
+    openKeys.add(node.getAttribute('data-tree-key'));
+  });
+
   tree.innerHTML = '';
 
   // -------------------------------------------------------
@@ -70,7 +81,7 @@ export function renderTree() {
   // -------------------------------------------------------
   // 1) chapters/ — the work itself; most-visited section
   // -------------------------------------------------------
-  tree.appendChild(sectionHeader('chapters/', { defaultOpen: true }));
+  tree.appendChild(sectionHeader('chapters/', { defaultOpen: true, key: 'section:chapters' }, openKeys));
   const chWrap = el('div', { class: 'tree-group-items' });
   s.chapters.forEach((ch) => {
     const produced = [
@@ -78,15 +89,19 @@ export function renderTree() {
       ch.has_summary, ch.has_slop_patch, ch.has_char_patch,
     ].filter(Boolean).length;
     const total = 6;
-    const label = el('div', { class: 'tree-group-label', onclick: (e) => toggleGroup(e.currentTarget) },
+    const groupKey = `chapter:${ch.ch}`;
+    const label = el('div', {
+      class: 'tree-group-label',
+      onclick: (e) => toggleGroup(e.currentTarget),
+      dataset: { treeKey: groupKey },
+    },
       el('span', { class: 'tree-caret' }, ICONS.caret),
       el('span', { class: 'tree-group-name' }, `ch${String(ch.ch).padStart(3, '0')}  ${ch.title.replace(/^第[一二三四五六七八九十]+章\s*·\s*/, '')}`),
       el('span', { class: 'tree-group-count' }, `${produced}/${total}`),
     );
-    // Auto-open only the current chapter. Previously every chapter with
-    // an `.md` on disk was expanded, which created a 12-group wall of
-    // text once you were past chapter 10.
-    const openDefault = ch.ch === currentChapter;
+    // Auto-open: 当前章默认展开；其他章按用户上次手动展开状态恢复
+    const userOpened = openKeys.has(groupKey);
+    const openDefault = ch.ch === currentChapter || userOpened;
     if (openDefault) label.classList.add('is-open');
 
     const items = el('div', { class: 'tree-items', style: openDefault ? '' : 'display:none' },
@@ -105,7 +120,7 @@ export function renderTree() {
   // -------------------------------------------------------
   // 2) bookkeeping/ — Lesson-3 Context-Reset authority
   // -------------------------------------------------------
-  tree.appendChild(sectionHeader('bookkeeping/ · Lesson-3 ledgers', { defaultOpen: true }));
+  tree.appendChild(sectionHeader('bookkeeping/ · Lesson-3 ledgers', { defaultOpen: true, key: 'section:bookkeeping' }, openKeys));
   [
     ['state/current_status_card.md', 'current_status_card.md', ICONS.status,  !bk.has_status_card],
     ['state/pending_hooks.md',       'pending_hooks.md',       ICONS.hook,    !bk.has_pending_hooks],
@@ -121,36 +136,42 @@ export function renderTree() {
   // -------------------------------------------------------
   // 3) state/ · 题材事实  — genre fact packs (edit rarely)
   // -------------------------------------------------------
-  tree.appendChild(sectionHeader('state/ · 题材事实', { defaultOpen: true }));
+  tree.appendChild(sectionHeader('state/ · 题材事实', { defaultOpen: true, key: 'section:genre-facts' }, openKeys));
   GENRE_FACTS.forEach(([p, name, icon]) => tree.appendChild(treeItem(p, name, icon)));
 
   // -------------------------------------------------------
   // 4) state/ · 运行时 meta — logs + bootstrap artifacts
   // -------------------------------------------------------
-  tree.appendChild(sectionHeader('state/ · 运行时 meta', { defaultOpen: true }));
+  tree.appendChild(sectionHeader('state/ · 运行时 meta', { defaultOpen: true, key: 'section:runtime-meta' }, openKeys));
   RUNTIME_META.forEach(([p, name, icon]) => tree.appendChild(treeItem(p, name, icon)));
 
   // -------------------------------------------------------
   // 5) rules/ — universal Progressive Disclosure set
   // -------------------------------------------------------
-  tree.appendChild(sectionHeader('rules/ · universal', { defaultOpen: false }));
+  const rulesKey = 'section:rules';
+  const rulesOpen = openKeys.has(rulesKey);
+  tree.appendChild(sectionHeader('rules/ · universal', { defaultOpen: false, key: rulesKey }, openKeys));
   const rulesWrap = el('div', { class: 'tree-section-items', 'data-collapsible-items': '' });
   [
     ['rules/00-information-priority.md', '00-information-priority.md'],
     ['rules/iron-laws.md',               'iron-laws.md'],
     ['rules/landmines.md',               'landmines.md'],
     ['rules/writing-style-core.md',      'writing-style-core.md'],
+    ['rules/writing-iron-laws.md',       'writing-iron-laws.md'],
+    ['rules/ai-rhythm-taboos.md',        'ai-rhythm-taboos.md'],
   ].forEach(([p, name]) => rulesWrap.appendChild(treeItem(p, name, ICONS.section)));
-  rulesWrap.style.display = 'none';
+  rulesWrap.style.display = rulesOpen ? '' : 'none';
   tree.appendChild(rulesWrap);
 
   // -------------------------------------------------------
   // 6) project/ — repo-level pinned docs
   // -------------------------------------------------------
-  tree.appendChild(sectionHeader('project/', { defaultOpen: false }));
+  const projKey = 'section:project';
+  const projOpen = openKeys.has(projKey);
+  tree.appendChild(sectionHeader('project/', { defaultOpen: false, key: projKey }, openKeys));
   const projWrap = el('div', { class: 'tree-section-items', 'data-collapsible-items': '' });
   projWrap.appendChild(treeItem('AGENTS.md', 'AGENTS.md', ICONS.pinned));
-  projWrap.style.display = 'none';
+  projWrap.style.display = projOpen ? '' : 'none';
   tree.appendChild(projWrap);
 }
 
@@ -159,12 +180,19 @@ export function renderTree() {
  * the header toggles the immediately-following sibling container
  * (the `data-collapsible-items` wrapper). Non-collapsible sections
  * render their items directly and ignore the click.
+ *
+ * 第 3 个参数 openKeys 是当前已展开的 key 集合（来自上次 render 前的快照），
+ * 用于让用户手动展开过的 section 在重建后保持展开。
  */
-function sectionHeader(title, opts = {}) {
-  const { defaultOpen = true } = opts;
+function sectionHeader(title, opts = {}, openKeys = null) {
+  const { defaultOpen = true, key = null } = opts;
+  // 优先级：用户已展开 > defaultOpen
+  const userOpened = key && openKeys && openKeys.has(key);
+  const isOpen = userOpened || defaultOpen;
   const hdr = el('div', {
-    class: 'tree-section-header' + (defaultOpen ? ' is-open' : ''),
+    class: 'tree-section-header' + (isOpen ? ' is-open' : ''),
     onclick: (e) => toggleSection(e.currentTarget),
+    dataset: key ? { treeKey: key } : {},
   }, title);
   return hdr;
 }
