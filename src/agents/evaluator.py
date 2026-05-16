@@ -37,6 +37,52 @@ from ..auditors.ai_slop_guard import static_scan_ai_rhythm
 from ..blackboard import Blackboard
 
 
+def _collect_recent_plans(bb: Blackboard, chapter: int, lookback: int = 5) -> tuple[list[dict], list[str]]:
+    """Return ([plan summaries], [inputs_read paths]) for the last `lookback`
+    plans before `chapter`. Each summary has chapter_type / locations / advances.
+
+    Used by Evaluator's iron_law_29 (进度律) cross-check: if recent chapters
+    keep recycling the same locations + advances, the chapter is "原地打转".
+    """
+    summaries: list[dict] = []
+    inputs: list[str] = []
+    if chapter <= 1:
+        return summaries, inputs
+    start = max(1, chapter - lookback)
+    for n in range(start, chapter):
+        rel = f"chapters/ch{n:03d}.plan.json"
+        if not bb.exists(rel):
+            continue
+        try:
+            p = bb.read_json(rel)
+        except Exception:
+            continue
+        scenes = p.get("scenes") or []
+        if not isinstance(scenes, list):
+            scenes = []
+        locs: list[str] = []
+        advs: list[str] = []
+        for s in scenes:
+            if not isinstance(s, dict):
+                continue
+            loc = s.get("location")
+            if isinstance(loc, str) and loc:
+                locs.append(loc)
+            for a in (s.get("advances") or []):
+                if isinstance(a, str) and a:
+                    advs.append(a)
+        summaries.append(
+            {
+                "ch": n,
+                "chapter_type": p.get("chapter_type", "?"),
+                "locations": sorted(set(locs)),
+                "advances": sorted(set(advs)),
+            }
+        )
+        inputs.append(f"state/{rel}")
+    return summaries, inputs
+
+
 class Evaluator(BaseAgent):
     name = "evaluator"
     temperature = 0.0
@@ -66,6 +112,17 @@ class Evaluator(BaseAgent):
         genre = setting.get("genre", "通用小说")
         era_label = setting.get("era", "")
 
+        # iron_law_29 进度律：读最近 5 章 plan 做"原地打转"对比。
+        # chapter==1 时返回空（无前 plan），向后兼容。
+        recent_plans, recent_plans_inputs = _collect_recent_plans(bb, chapter, lookback=5)
+
+        # plot_arc.yaml 是可选的全书坐标系（Oracle P0+P1 修复）。Evaluator 借
+        # 它判断"本章是否 act_finale，必须收束所有 must_close 项"。不存在
+        # 时 silently 跳过——iron_law_29 的核心仍是 recent_plans 对比。
+        plot_arc_input: list[str] = []
+        if bb.exists("plot_arc.yaml"):
+            plot_arc_input.append("state/plot_arc.yaml")
+
         inputs_read = [
             f"state/{chapter_path}",
             "state/characters.yaml",
@@ -74,7 +131,7 @@ class Evaluator(BaseAgent):
             "rules/landmines.md",
             "rules/iron-laws.md",
             "rules/00-information-priority.md",
-        ]
+        ] + recent_plans_inputs + plot_arc_input
         # Only log the Lesson-3 bookkeeping files when they actually carry content.
         # Listing empty/absent files in inputs_read would falsely suggest to the
         # Inspector (and to future debuggers) that the Evaluator had a "who knows
@@ -193,12 +250,41 @@ class Evaluator(BaseAgent):
             "但你的 LLM 判断仍要据此决定 landmine_18 在 evidence 里写什么细节。）\n"
         )
 
+        # iron_law_29 进度律对照表：把最近 5 章 plan 摘要喂给 LLM 让它
+        # 机械判断"原地打转"。chapter<=1 或全部 plan 缺失时不发射这一段。
+        progress_law_block = ""
+        if recent_plans:
+            lines = [
+                "\n\n# 最近 5 章 plan 对照表（用于 iron_law_29 进度律检测）",
+                "",
+                "| ch | chapter_type | locations | advances |",
+                "|---|---|---|---|",
+            ]
+            for r in recent_plans:
+                locs_str = ",".join(r["locations"])[:80] or "（无）"
+                advs_str = ",".join(r["advances"]) or "（无）"
+                lines.append(f"| {r['ch']} | {r['chapter_type']} | {locs_str} | {advs_str} |")
+            lines.append("")
+            lines.append(
+                "判断本章是否触发 iron_law_29（进度律）：\n"
+                "- 本章 scenes[].location 是否与上一章完全重叠？\n"
+                "- 本章 advances 集合是否与上一章完全相同？\n"
+                "- 是否连续 3+ 章相同 chapter_type（无『战斗』『回收』穿插）？\n"
+                "- 距离最近一次 chapter_type ∈ {战斗, 回收} 是否已超过 4 章？\n"
+                "若任一命中，必须在最匹配的现有 landmine（通常是 landmine_15 节奏崩溃 / "
+                "landmine_8 冲突乏力 / landmine_4 视角杂乱 之一）hit=true，"
+                "evidence 必须**显式标注 `iron_law_29 进度律`**并引用本表中相邻两章的 "
+                "location/advances 字段说明重叠。"
+            )
+            progress_law_block = "\n".join(lines) + "\n"
+
         user = (
             f"# 本章节（第 {chapter} 章）全文\n\n"
             f"{chapter_text}\n\n"
             f"# 人物档案 (characters.yaml)\n\n```yaml\n{characters}\n```\n\n"
             f"# 时间线 (timeline.yaml)\n\n```yaml\n{timeline}\n```\n"
             f"{bookkeeping_block}"
+            f"{progress_law_block}"
             f"\n# 19 个雷点完整定义 (rules/landmines.md)\n\n"
             f"{landmines}\n\n"
             f"# 输出 JSON 结构（严格遵守）\n\n"

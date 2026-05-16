@@ -72,6 +72,11 @@ class Planner(BaseAgent):
         # 可以参考相关桶里的 tips。不存在 → 跳过（100% 向后兼容）。
         dna_tips_block, dna_tips_inputs = _read_dna_tips(bb, for_agent="planner")
 
+        # Plot Arc: 全书坐标系（Oracle P0+P1 修复）。让 Planner 知道自己在写
+        # 哪一章 / 当前是哪个 act / 还剩多少 / 必须收束什么。不存在 → 跳过
+        # （100% 向后兼容）。
+        plot_arc_block, plot_arc_inputs = _read_plot_arc_block(bb, chapter)
+
         inputs_read: list[str] = (
             ["state/outline.json", "state/setting.yaml"]
             + summary_inputs
@@ -80,6 +85,7 @@ class Planner(BaseAgent):
             + golden_three_inputs
             + sensory_kit_inputs
             + dna_tips_inputs
+            + plot_arc_inputs
         )
 
         system = (
@@ -122,11 +128,20 @@ class Planner(BaseAgent):
             "    - `pacing_risk`：节奏拖沓或爽点后置的风险\n"
             "    - `vocab_fatigue_risk`：本章易出现的高疲劳词（冷笑/倒吸凉气/心跳漏了一拍等）\n"
             "    每项为一句话具体提示（≤30 字），无风险写 `无`。\n"
+            "11. **全书坐标系优先（如 user prompt 含『全书坐标系』段）**：\n"
+            "    - 你不是只为本章服务，是为全书弧线服务。本章节拍设计**必须**推动当前 act 目标的具体一步；\n"
+            "    - 如果本章是 act_finale（当前 act 最后一章），**必须收束全部 must_close 项**；\n"
+            "    - 如果距 act 末尾还远，可以发展过程，但不得脱轨当前 act 目标；\n"
+            "    - **绝对禁止**让本章变成『上一章危机的延续 + 角色对话/包扎/等待』循环。\n"
+            "12. **场景去重律**：本章 scenes[].location 集合**不得**与上一章 plan 完全相同。\n"
+            "    若被迫继续在同一 location，必须给该场景一个**新的物理目标**（取得物品/击败对手/解锁路径），\n"
+            "    不得只让角色『对话+包扎+等待』。\n"
         )
 
         cur_json = json.dumps(cur, ensure_ascii=False, indent=2)
         user = (
-            f"# 本章（第 {chapter} 章）大纲条目\n\n```json\n{cur_json}\n```\n\n"
+            plot_arc_block
+            + f"# 本章（第 {chapter} 章）大纲条目\n\n```json\n{cur_json}\n```\n\n"
             f"# 当前状态卡（当前时间点的权威状态，优先于摘要；冲突以正文+状态卡为准）\n\n"
             f"{status_card_text}\n\n"
             f"# 待回收伏笔池（优先安排回收旧钩子，不要只埋新坑）\n\n"
@@ -401,3 +416,81 @@ def _read_dna_tips(bb, *, for_agent: str = "planner") -> tuple[str, list[str]]:
             "- 『通用』那几条决定全文口味，不可偏离。\n\n"
         )
     return header + "\n".join(lines) + "\n\n", ["state/dna_structured.yaml"]
+
+
+def _read_plot_arc_block(bb, chapter: int) -> tuple[str, list[str]]:
+    """Read state/plot_arc.yaml and render the 全书坐标系 block.
+
+    Plot arc tells Planner where in the book it is and what must be closed
+    by the end of the current act. Without this Planner only sees local
+    context and degenerates into "local greedy" loops (Oracle P0+P1 fix).
+
+    Absent → empty block + empty inputs (100% backward compatible).
+    Malformed YAML / schema → empty block + empty inputs (silent fallback;
+    bootstrap layer is responsible for warning the author).
+    """
+    if not bb.exists("plot_arc.yaml"):
+        return "", []
+    try:
+        from src.tools.plot_arc import read_plot_arc, derive_planner_context
+
+        arc = read_plot_arc(bb.root)
+    except Exception:
+        # Silently degrade — Planner still works, just without the global view.
+        return "", []
+    if arc is None:
+        return "", []
+
+    try:
+        ctx = derive_planner_context(arc, chapter)
+    except ValueError:
+        # current_chapter out of range (e.g. arc says 50 chapters but pipeline
+        # is asked for ch51). Don't crash Planner; degrade gracefully.
+        return "", []
+
+    cur = ctx["current_act"]
+    nxt = ctx["next_act"]
+
+    lines = [
+        "# 全书坐标系（你在写哪一章）",
+        "",
+        f"- 总章数：{arc.total_chapters}",
+        f"- 当前进度：ch{chapter}/{arc.total_chapters} ({ctx['total_progress_pct']}%)",
+        f"- 全书还剩：{ctx['chapters_left_total']} 章",
+        f"- 全书终极目标：{arc.ultimate_goal}",
+        "",
+        f"- 当前 act：**{cur.name}**（ch{cur.range[0]}-{cur.range[1]}）",
+        f"  - act 内进度：{ctx['current_act_progress']}",
+        f"  - act 还剩：{ctx['chapters_left_in_act']} 章（含本章）",
+    ]
+    if cur.goal.strip():
+        lines.append(f"  - act 目标：{cur.goal.strip()}")
+
+    must_close = ctx["must_close_in_current_act"]
+    if must_close:
+        lines.append("  - **本卷必须收束**：")
+        for item in must_close:
+            lines.append(f"    - {item}")
+
+    if ctx["is_act_finale"]:
+        lines.append("")
+        lines.append(
+            "⚠ **本章是当前 act 的最后一章（act_finale），必须收束所有 must_close 项**。"
+        )
+        lines.append(
+            "  不允许把这些线索推到下一卷——若有未收束项，本章 plan 必须为它们安排具体场景。"
+        )
+
+    if nxt is not None:
+        lines.append("")
+        lines.append(f"- 下一 act：{nxt.name}（ch{nxt.range[0]}-{nxt.range[1]}）")
+        if nxt.goal.strip():
+            lines.append(f"  - 下一 act 目标：{nxt.goal.strip()}")
+
+    lines.append("")
+    lines.append(
+        "**本章节拍必须服务于当前 act 目标**——不允许让本章变成『上一章危机的延续 + "
+        "对话/包扎/等待』。每个 scene 的 advances 必须能映射到 act 目标的某个分量。"
+    )
+    lines.append("")
+    return "\n".join(lines) + "\n", ["state/plot_arc.yaml"]

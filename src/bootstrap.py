@@ -57,6 +57,11 @@ OPTIONAL_PROJECT_FILES = (
     # 语境查表注入相关创作手法。可选——不存在时退回到"只读 4 份题材文件"
     # 的旧行为（100% 向后兼容）。
     "dna_structured.yaml",
+    # plot_arc.yaml: 全书坐标系（Oracle P0+P1 修复）。Planner 读取它获得
+    # "我在写哪一章 / 当前是哪个 act / 还剩多少 / 必须收束什么"的全局视角，
+    # 避免退化为"局部贪心"原地循环。不存在时 Planner 行为不变（100% 向后兼容），
+    # 但 bootstrap 会发出 warning 建议作者跑 init_plot_arc 生成模板。
+    "plot_arc.yaml",
 )
 
 
@@ -196,6 +201,17 @@ def bootstrap_project(project_id: str, *, preserve_progress: bool = False) -> Bo
             copied.append(fname)
         elif dst.exists():
             dst.unlink()
+
+    # Plot-arc warning: 全书坐标系是 Oracle P0+P1 修复的核心，强烈建议配置。
+    # 不存在时不阻断 bootstrap（100% 向后兼容），但打 warning 让作者注意。
+    if not (project_dir / "plot_arc.yaml").exists():
+        print(
+            f"⚠ {project_id} 未配置 plot_arc.yaml — Planner 将无全书坐标系，"
+            f"易退化为局部贪心。\n"
+            f"  建议跑：python -m src.tools.init_plot_arc {project_id} 生成模板，"
+            f"再编辑后重新 bootstrap。",
+            file=sys.stderr,
+        )
 
     # Synthesize setting.yaml from project.yaml + runtime fields
     merged = dict(project_yaml)
