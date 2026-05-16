@@ -34,20 +34,61 @@ function renderRow(job) {
   const target = `${job.target.type}:${job.target.id}`;
   const progress = job.progress_text || "";
   const ago = new Date(job.updated_at * 1000).toLocaleString("zh-CN");
+  // failed/aborted/interrupted 用 button 就地展开 log（无产物可看，不跳 genre view）
+  // running/done 仍跳详情页（有产物可看）
+  const isTerminalNoArtifact = ["failed", "aborted", "interrupted"].includes(job.state);
+  const wrapperOpen = isTerminalNoArtifact
+    ? `<button type="button" class="job-row" data-job-id="${job.job_id}">`
+    : `<a class="job-row" href="/jobs/${job.job_id}">`;
+  const wrapperClose = isTerminalNoArtifact ? `</button>` : `</a>`;
   return `
-    <a class="job-row" href="/jobs/${job.job_id}">
-      <div class="job-row-main">
-        <span class="job-kind">${kindLabel(job.kind)}</span>
-        <span class="job-target">${target}</span>
-        <span class="job-label">${job.label}</span>
-      </div>
-      <div class="job-row-meta">
-        ${stateBadge(job.state)}
-        <span class="job-progress">${progress}</span>
-        <span class="job-time">${ago}</span>
-      </div>
-    </a>
+    <div class="job-row-wrap" data-job-id="${job.job_id}">
+      ${wrapperOpen}
+        <div class="job-row-main">
+          <span class="job-kind">${kindLabel(job.kind)}</span>
+          <span class="job-target">${target}</span>
+          <span class="job-label">${job.label}</span>
+        </div>
+        <div class="job-row-meta">
+          ${stateBadge(job.state)}
+          <span class="job-progress">${progress}</span>
+          <span class="job-time">${ago}</span>
+        </div>
+      ${wrapperClose}
+      <div class="job-log-panel" hidden></div>
+    </div>
   `;
+}
+
+async function showJobLog(jobId, panelEl) {
+  if (!panelEl.hidden) {
+    panelEl.hidden = true;
+    panelEl.innerHTML = "";
+    return;
+  }
+  panelEl.hidden = false;
+  panelEl.innerHTML = `<div class="job-log-loading">加载中…</div>`;
+  try {
+    const [jobRes, logRes] = await Promise.all([
+      fetch(`/api/jobs/${jobId}`),
+      fetch(`/api/jobs/${jobId}/log`),
+    ]);
+    const job = jobRes.ok ? await jobRes.json() : {};
+    const logData = logRes.ok ? await logRes.json() : { content: "" };
+    const errorBlock = job.error
+      ? `<div class="job-log-error"><strong>错误：</strong>${escapeHtml(job.error)}</div>`
+      : "";
+    panelEl.innerHTML = `
+      ${errorBlock}
+      <pre class="job-log-content">${escapeHtml(logData.content || "(空日志)")}</pre>
+    `;
+  } catch (e) {
+    panelEl.innerHTML = `<div class="job-log-error">加载日志失败：${escapeHtml(String(e))}</div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 async function render() {
@@ -57,6 +98,15 @@ async function render() {
     return;
   }
   listEl.innerHTML = jobs.map(renderRow).join("");
+  // 绑定 failed/aborted/interrupted 的就地展开
+  listEl.querySelectorAll("button.job-row").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const wrap = btn.closest(".job-row-wrap");
+      const panel = wrap?.querySelector(".job-log-panel");
+      if (panel) showJobLog(btn.dataset.jobId, panel);
+    });
+  });
 }
 
 document.querySelectorAll(".filter-tabs button").forEach((btn) => {

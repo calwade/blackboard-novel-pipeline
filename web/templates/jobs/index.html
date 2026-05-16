@@ -1,5 +1,8 @@
 {% extends "presets/_base.html" %}
 {% block title %}题材任务 · Novelforge{% endblock %}
+{% block page_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/jobs.css') }}" />
+{% endblock %}
 {% block crumbs %}
 <a href="/">作品</a>
 <span class="crumb-sep">›</span>

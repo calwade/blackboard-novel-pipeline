@@ -1,0 +1,174 @@
+/* Pages · /jobs
+   Job list rows with inline log expansion for failed/aborted/interrupted jobs.
+   Running/done jobs link to /jobs/<id> (genre view). */
+
+.jobs-list-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 22px 28px 72px;
+}
+
+.jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.jobs-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-soft);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.job-row-wrap {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: border-color 0.12s;
+}
+
+.job-row-wrap:hover {
+  border-color: var(--line-soft);
+}
+
+.job-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  text-decoration: none;
+  color: var(--text);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+}
+
+.job-row:hover {
+  background: var(--panel-2);
+}
+
+.job-row-main {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.job-kind {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--amber);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.job-target {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.job-label {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.job-row-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-soft);
+  flex-wrap: wrap;
+}
+
+.job-progress {
+  flex: 1;
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+
+.job-time {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+/* Inline log panel for failed/aborted/interrupted jobs */
+.job-log-panel {
+  border-top: 1px solid var(--line);
+  background: var(--ink);
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.job-log-loading {
+  color: var(--text-soft);
+  text-align: center;
+  padding: 24px;
+}
+
+.job-log-error {
+  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  border-radius: 3px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  color: var(--red-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.job-log-error strong {
+  color: var(--red);
+  margin-right: 6px;
+}
+
+.job-log-content {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Filter tabs */
+.filter-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.filter-tabs button {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.12s;
+}
+
+.filter-tabs button:hover {
+  color: var(--text);
+  border-color: var(--line-soft);
+}
+
+.filter-tabs button.active {
+  background: var(--amber);
+  color: var(--ink);
+  border-color: var(--amber);
+}
