@@ -2,7 +2,7 @@
 
 > 每一条都是对 AI 生成小说时最常见失误的否定命题。
 > Evaluator 引用时使用 `iron_law_N` 标识符。
-> 当前共 29 条（1-24 为原版，25-28 为 2026-05-10 借鉴 skill 新增，29 为 2026-05-17 Oracle P0+P1 修复"原地打转"问题新增）。
+> 当前共 30 条（1-24 为原版，25-28 为 2026-05-10 借鉴 skill 新增，29 为 2026-05-17 Oracle P0+P1 修复"原地打转"问题新增，30 为 2026-05-17 Oracle P3 修复"长跑被动症"新增）。
 
 ## iron_law_1: 人设一致性
 
@@ -188,3 +188,21 @@
 > 在 Evaluator verdict 中触发本铁律时，请在最匹配的现有 landmine（通常 landmine_15
 > 节奏崩溃 / landmine_8 冲突乏力 / landmine_4 视角杂乱 之一）的 evidence 字段
 > **显式标注 `iron_law_29 进度律`**，并引用对照表里相邻两章的 location/advances 重叠证据。
+
+## iron_law_30: 全局节奏律（dna value_anchor 兑现）
+
+每 5 章必须命中一次 dna value_anchor（爽感 / 掌控感 / 黑色幽默 / 生存智慧）。长跑中持续守势 / 被动会让读者失去爽点期待——这是 P3 修复的"被动求生症"。
+
+❌ 最近 5 章 0 次爽感 anchor + 0 次掌控感 anchor
+❌ 主角连续 8+ 章未主动设局（仅在被动反应 / 求生）
+❌ 距上次"反派被打脸 / 能力首秀 / 资源逆袭" >10 章
+❌ milestone 章节正文未体现 plot_arc.yaml milestone.beat 描述的奇观时刻
+
+✅ 每 3-5 章至少 1 次主角主动出手的奇观时刻
+✅ 长期被动后必有一次"反客为主"的转折
+✅ milestone 章节正文必有一段 ≥150 字直接兑现 milestone.beat 的奇观时刻
+
+> 在 Evaluator verdict 中触发本铁律时，请在最匹配的现有 landmine（通常 landmine_15
+> 节奏崩溃 / landmine_8 冲突乏力 / landmine_2 套路化爽感 之一）的 evidence 字段
+> **显式标注 `iron_law_30 全局节奏律`**，并引用最近 5 章 anchor 分布表说明缺口。
+> milestone 章节未兑现 beat 时 severity = high（直接判 fail），普通章节连续被动 severity = medium。

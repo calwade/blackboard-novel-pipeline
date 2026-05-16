@@ -30,11 +30,35 @@ from __future__ import annotations
 import json
 import re
 import time
+from typing import Optional
 
 from ._base import BaseAgent
 from ._verdict_schema import LANDMINE_IDS, validate_verdict
 from ..auditors.ai_slop_guard import static_scan_ai_rhythm
 from ..blackboard import Blackboard
+
+
+def _get_current_milestone(bb: Blackboard, chapter: int):
+    """Return the PlotMilestone for `chapter` if plot_arc.yaml exists and
+    a milestone is configured for that chapter, else None.
+
+    Used by the Evaluator's iron_law_30 milestone check.
+    """
+    if not bb.exists("plot_arc.yaml"):
+        return None
+    try:
+        from src.tools.plot_arc import read_plot_arc, derive_planner_context
+
+        arc = read_plot_arc(bb.root)
+    except Exception:
+        return None
+    if arc is None:
+        return None
+    try:
+        ctx = derive_planner_context(arc, chapter)
+    except ValueError:
+        return None
+    return ctx.get("current_milestone")
 
 
 def _collect_recent_plans(bb: Blackboard, chapter: int, lookback: int = 5) -> tuple[list[dict], list[str]]:
@@ -278,6 +302,82 @@ class Evaluator(BaseAgent):
             )
             progress_law_block = "\n".join(lines) + "\n"
 
+        # iron_law_30 全局节奏律：最近 5 章 dna anchor 分布 + milestone 兑现检查。
+        # Oracle P3 修复"长跑被动症"——每 5 章必须命中 1 次 dna value_anchor。
+        # 推断逻辑复用 Planner 的 _infer_anchor_from_plan（保守规则映射）。
+        global_rhythm_block = ""
+        try:
+            from .planner import _infer_anchor_from_plan
+        except Exception:
+            _infer_anchor_from_plan = None  # type: ignore
+
+        if _infer_anchor_from_plan is not None and recent_plans:
+            inferred: list[tuple[int, Optional[str]]] = []
+            anchor_counts: dict[str, int] = {
+                "爽感": 0, "掌控感": 0, "黑色幽默": 0, "生存智慧": 0
+            }
+            none_chapters: list[int] = []
+            # recent_plans 由 _collect_recent_plans 产生，含 ch/chapter_type/scenes 摘要
+            # 但不带原始 advances 列表的形态——用 plan.json 重新读
+            for r in recent_plans:
+                n = r["ch"]
+                rel = f"chapters/ch{n:03d}.plan.json"
+                if not bb.exists(rel):
+                    continue
+                try:
+                    plan = bb.read_json(rel)
+                except Exception:
+                    continue
+                a = _infer_anchor_from_plan(plan)
+                inferred.append((n, a))
+                if a:
+                    anchor_counts[a] = anchor_counts.get(a, 0) + 1
+                else:
+                    none_chapters.append(n)
+
+            has_payoff = anchor_counts.get("爽感", 0) > 0 or anchor_counts.get("掌控感", 0) > 0
+            payoff_status = "是" if has_payoff else "否（命中 iron_law_30·全局节奏律）"
+
+            anchor_dist_lines = []
+            for ch_n, a in inferred:
+                anchor_dist_lines.append(f"  - ch{ch_n}: {a or '无（保守判定为 None）'}")
+
+            block_lines = [
+                "\n# 全局节奏检测（iron_law_30 用）",
+                "",
+                f"- 最近 {len(inferred)} 章 anchor 推断：",
+                *anchor_dist_lines,
+                f"- anchor 计数：爽感×{anchor_counts.get('爽感',0)} / "
+                f"掌控感×{anchor_counts.get('掌控感',0)} / "
+                f"黑色幽默×{anchor_counts.get('黑色幽默',0)} / "
+                f"生存智慧×{anchor_counts.get('生存智慧',0)}（None×{len(none_chapters)}）",
+                f"- 是否含爽感 / 掌控感（最近窗口）：{payoff_status}",
+                "",
+                "判定规则（按 iron_law_30）：",
+                "- 最近 5 章 0 次爽感 + 0 次掌控感 → severity=medium",
+                "- 最近 8+ 章无任一 dna anchor → severity=high",
+                "- evidence 必须**显式标注 `iron_law_30 全局节奏律`**并引用上面的计数表说明缺口。",
+            ]
+
+            # milestone 兑现检测：本章是否是 milestone？若是，必须检查正文是否含 ≥150 字奇观时刻
+            milestone_for_this_chapter = _get_current_milestone(bb, chapter)
+            if milestone_for_this_chapter is not None:
+                ms = milestone_for_this_chapter
+                block_lines.extend([
+                    "",
+                    "⚠ **本章是 plot_arc.yaml 配置的 milestone 章节**",
+                    f"- milestone.type：{ms.type}",
+                    f"- milestone.anchor：{ms.anchor}",
+                    f"- milestone.beat（必须兑现）：{ms.beat.strip()[:300]}",
+                    "- **必须检查正文是否兑现 milestone.beat**：",
+                    f"  - 是否有 ≥150 字直接对应『{ms.type}』的奇观段落？",
+                    f"  - 是否真的体现了『{ms.anchor}』anchor（而非走过场）？",
+                    "- 未兑现 = severity=high（直接判 fail），evidence 引正文最相关段落 + 标注 "
+                    "`iron_law_30 milestone 未兑现`。",
+                ])
+
+            global_rhythm_block = "\n".join(block_lines) + "\n"
+
         user = (
             f"# 本章节（第 {chapter} 章）全文\n\n"
             f"{chapter_text}\n\n"
@@ -285,6 +385,7 @@ class Evaluator(BaseAgent):
             f"# 时间线 (timeline.yaml)\n\n```yaml\n{timeline}\n```\n"
             f"{bookkeeping_block}"
             f"{progress_law_block}"
+            f"{global_rhythm_block}"
             f"\n# 19 个雷点完整定义 (rules/landmines.md)\n\n"
             f"{landmines}\n\n"
             f"# 输出 JSON 结构（严格遵守）\n\n"

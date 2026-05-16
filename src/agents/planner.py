@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Optional
 
 from ._base import BaseAgent
 from ..blackboard import Blackboard
@@ -142,6 +143,19 @@ class Planner(BaseAgent):
             "12. **场景去重律**：本章 scenes[].location 集合**不得**与上一章 plan 完全相同。\n"
             "    若被迫继续在同一 location，必须给该场景一个**新的物理目标**（取得物品/击败对手/解锁路径），\n"
             "    不得只让角色『对话+包扎+等待』。\n"
+            "13. **milestone 强制律**：如果 user prompt 含『🎯 本章 milestone（强制兑现）』段：\n"
+            "    - chapter_type / advances 字段如有 force_* 提示，**必须按强制值输出**——\n"
+            "      不允许以『叙事节奏』『过渡章』为由偏离；\n"
+            "    - **至少一个 scene 的 conflict + sensory_prompts 必须直接对应 milestone.beat**\n"
+            "      描述的奇观时刻（且 scene.word_target 不得 < 600，奇观需要篇幅兑现）；\n"
+            "    - landmines_to_avoid 必须**新增一条**：『本章未在正文兑现 milestone.beat\n"
+            "      （{anchor} 锚点）即整章失败』；\n"
+            "    - writing_self_check.pacing_risk 必须明确写明本章 anchor 兑现路径，不得为『无』。\n"
+            "14. **anchor 配额律**：如果 user prompt 含『当前 act anchor 配额』段：\n"
+            "    - 若有任一 anchor 显示『缺口』，本章 chapter_type / scenes 选择应**优先**\n"
+            "      补该缺口，不得在已经满额的 anchor 上继续堆叠；\n"
+            "    - 若本章不是 milestone 章但已临近 act 末尾（chapters_left_in_act ≤ 3）\n"
+            "      且仍有缺口，必须把缺口 anchor 写进 closing_hook 暗示，给下一章铺路。\n"
         )
 
         cur_json = json.dumps(cur, ensure_ascii=False, indent=2)
@@ -499,4 +513,196 @@ def _read_plot_arc_block(bb, chapter: int) -> tuple[str, list[str]]:
         "对话/包扎/等待』。每个 scene 的 advances 必须能映射到 act 目标的某个分量。"
     )
     lines.append("")
+
+    # P0+P1 续：milestone 强制段（命中本章）+ next milestone 距离段
+    cur_ms = ctx.get("current_milestone")
+    if cur_ms is not None:
+        lines.append("## 🎯 本章 milestone（强制兑现）")
+        lines.append("")
+        lines.append(f"- 类型：**{cur_ms.type}**")
+        lines.append(f"- 价值锚点（anchor）：**{cur_ms.anchor}**")
+        if cur_ms.beat.strip():
+            beat_compact = cur_ms.beat.strip().replace("\n", " ")
+            lines.append(f"- 必须命中的奇观时刻（beat）：{beat_compact}")
+        if cur_ms.force_chapter_type:
+            lines.append(
+                f"- ⚠ **chapter_type 强制为：`{cur_ms.force_chapter_type}`**（不得为别的值）"
+            )
+        if cur_ms.force_advances:
+            adv_str = "、".join(cur_ms.force_advances)
+            lines.append(
+                f"- ⚠ **scenes[].advances 必须至少包含**：{adv_str}（任选其一即可，多选更佳）"
+            )
+        lines.append(
+            "- ⚠ **landmines_to_avoid 必须新增一条**："
+            f"『本章未在正文兑现 milestone.beat（{cur_ms.anchor} 锚点）即整章失败』"
+        )
+        lines.append("")
+    else:
+        nxt_ms = ctx.get("next_milestone")
+        dist = ctx.get("chapters_until_next_milestone")
+        if nxt_ms is not None and dist is not None:
+            lines.append(f"## 距下个 milestone 还 {dist} 章")
+            lines.append("")
+            lines.append(
+                f"- 下个 milestone（ch{nxt_ms.chapter}）：{nxt_ms.type} · "
+                f"anchor=**{nxt_ms.anchor}**"
+            )
+            if nxt_ms.beat.strip():
+                beat_compact = nxt_ms.beat.strip().replace("\n", " ")
+                lines.append(f"- 描述：{beat_compact}")
+            lines.append(
+                "  → 本章应做铺垫 / 不应消耗 anchor 配额；不要把下个 milestone 的奇观时刻提前。"
+            )
+            lines.append("")
+
+    # P0+P1 续：anchor_quota 当前消耗状态（只在该 act 配置 anchor_quota 时显示）
+    quota_status = _compute_anchor_quota_status(bb, cur, chapter)
+    if quota_status:
+        lines.append("## 当前 act anchor 配额")
+        lines.append("")
+        lines.append(quota_status)
+        lines.append("")
+
     return "\n".join(lines) + "\n", ["state/plot_arc.yaml"]
+
+
+# ----- anchor 推断（保守规则映射） + 配额状态 -----------------------------
+
+def _infer_anchor_from_plan(plan: dict) -> Optional[str]:
+    """从一个 plan.json 推断主导 dna value_anchor。
+
+    保守原则：能不归就不归——返回 None 表示无法判定（典型如纯过渡章）。
+    Oracle 报告里 ch26-30 全是 advances=[信息]，这个函数会判定为 None
+    （没足够信号判定 anchor），从而被算作"全部缺爽点"。
+
+    映射规则：
+      - chapter_type=战斗 + advances 含 地位/资源/伤亡 → 爽感
+      - chapter_type=回收 + advances 含 信息/境界 → 掌控感
+      - chapter_type=回收 + advances 含 地位/资源 → 爽感（爽点兑现型回收）
+      - chapter_type=布局 + advances 含 信息（且只有 信息）→ None（保守）
+      - chapter_type=布局 + advances 含 信息 + 地位/仇恨 → 掌控感
+      - chapter_type=过渡 + advances 含 境界 → 生存智慧
+      - chapter_type=过渡 + advances 仅 信息 → None（典型流水账）
+    """
+    chapter_type = plan.get("chapter_type")
+    scenes = plan.get("scenes") or []
+    if not isinstance(scenes, list):
+        return None
+    advs: set[str] = set()
+    for s in scenes:
+        if not isinstance(s, dict):
+            continue
+        for a in (s.get("advances") or []):
+            if isinstance(a, str) and a:
+                advs.add(a)
+    if not advs:
+        return None
+
+    if chapter_type == "战斗":
+        if advs & {"地位", "资源", "伤亡"}:
+            return "爽感"
+        if "境界" in advs:
+            return "生存智慧"
+    elif chapter_type == "回收":
+        if advs & {"地位", "资源"}:
+            return "爽感"
+        if advs & {"信息", "境界"}:
+            return "掌控感"
+    elif chapter_type == "布局":
+        if advs & {"地位", "仇恨"} and "信息" in advs:
+            return "掌控感"
+        # 仅 信息 / 仅 资源 → 保守不归（典型流水账）
+        if advs == {"信息"} or advs == {"资源"}:
+            return None
+    elif chapter_type == "过渡":
+        if "境界" in advs:
+            return "生存智慧"
+        if advs == {"信息"} or advs == {"资源"} or advs == {"信息", "资源"}:
+            return None
+    return None
+
+
+def _format_quota_value(v) -> str:
+    """格式化 anchor_quota 的值，方便和实际计数比较显示。"""
+    if isinstance(v, int):
+        return str(v)
+    return str(v)  # str 形式如 ">=8" 直接展示
+
+
+def _compute_anchor_quota_status(bb, cur_act, chapter: int) -> str:
+    """扫描 cur_act.range 内已写过的 plan.json，统计每种 anchor 已出现几次，
+    与 cur_act.anchor_quota 配额比较，渲染 markdown 表格。
+
+    cur_act 没有 anchor_quota → 返回空串
+    cur_act.range[0] >= chapter（还没开始这卷） → 返回空串
+    """
+    if not cur_act.anchor_quota:
+        return ""
+
+    act_start, act_end = cur_act.range
+    # 扫描 act 起点到当前章前（不含当前章——这章还没生成 plan）
+    upper = min(chapter - 1, act_end)
+    if upper < act_start:
+        # 当前是 act 的第 1 章，还没历史
+        upper = act_start - 1
+
+    counter: dict[str, int] = {a: 0 for a in cur_act.anchor_quota.keys()}
+    inferred_chapters: dict[str, list[int]] = {a: [] for a in cur_act.anchor_quota.keys()}
+    none_chapters: list[int] = []
+    scanned = 0
+    for n in range(act_start, upper + 1):
+        rel = f"chapters/ch{n:03d}.plan.json"
+        if not bb.exists(rel):
+            continue
+        try:
+            plan = bb.read_json(rel)
+        except Exception:
+            continue
+        scanned += 1
+        anchor = _infer_anchor_from_plan(plan)
+        if anchor and anchor in counter:
+            counter[anchor] += 1
+            inferred_chapters[anchor].append(n)
+        else:
+            none_chapters.append(n)
+
+    if scanned == 0:
+        # 卷刚开始，没历史可统计 — 仍然显示配额本身让 Planner 知道
+        rows = [
+            f"| {a} | 0 | {_format_quota_value(v)} | 缺口（卷刚开始） |"
+            for a, v in cur_act.anchor_quota.items()
+        ]
+        header = "| anchor | 已兑现 | 配额 | 状态 |\n|---|---|---|---|"
+        return header + "\n" + "\n".join(rows)
+
+    rows = []
+    for a, quota in cur_act.anchor_quota.items():
+        got = counter[a]
+        chs = inferred_chapters[a]
+        chs_str = ",".join(f"ch{c}" for c in chs[-5:]) if chs else "—"
+        # 判断"缺口"：int 配额时 got<quota 算缺口；str 配额（如 >=8）当前
+        # 只做提示，不做硬比较——交给 LLM 看字符串约束。
+        if isinstance(quota, int):
+            if got < quota:
+                status = f"**缺口**（差 {quota - got} 次，已出现章节：{chs_str}）"
+            else:
+                status = f"已满额（出现章节：{chs_str}）"
+        else:
+            status = f"约束：{quota}（已出现：{chs_str}）"
+        rows.append(f"| {a} | {got} | {_format_quota_value(quota)} | {status} |")
+
+    header = "| anchor | 已兑现 | 配额 | 状态 |\n|---|---|---|---|"
+    table = header + "\n" + "\n".join(rows)
+
+    note_lines = [
+        "",
+        f"_扫描了本卷 {act_start}..{upper} 共 {scanned} 个 plan.json；"
+        f"其中 {len(none_chapters)} 章 anchor 无法判定_"
+    ]
+    if none_chapters:
+        note_lines.append(
+            f"  （anchor=None 的章节：{','.join(f'ch{c}' for c in none_chapters[-8:])}"
+            "——这些章节实际并未兑现任何 dna value_anchor，应纳入'缺口'考量）"
+        )
+    return table + "\n".join(note_lines)
