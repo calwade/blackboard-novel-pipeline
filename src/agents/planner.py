@@ -92,6 +92,19 @@ class Planner(BaseAgent):
         system = (
             f"你是拥有 20 年经验的网络小说责编。当前题材：{genre}；时代/世界观：{era_label}。\n"
             "你的任务：把一章的『大纲条目』细化为 Generator 可以直接下笔的『节拍表』。\n"
+            "\n"
+            "🔴【题材锚定 · 最高优先级，凌驾所有其他规则】\n"
+            "本章 plan 的所有「主角名 / 配角名 / 核心道具名 / 地名 / 时代锚点」\n"
+            "**必须**严格使用下方 user prompt 中 era.md 段 + writing-style-extra.md 段\n"
+            "明确出现的名词。\n"
+            "- 即使你的训练直觉提示别的名字（古风/玄幻/历史人物名），也必须忽视直觉。\n"
+            "- scenes[].location 必须命中 era.md 提到的地标（或其下属子地点）。\n"
+            "- scenes[].sensory_prompts 必须用 era.md 的时代/物种/物质特征\n"
+            "  （末世题材 → 灰烬/废墟/契书；不得出现「嘉靖通宝/棺木/烙疤」等其他时代道具）。\n"
+            "- 反例：若 era.md 写主角=苏烬、时代=末世 G22 纪元，plan 里却出现『无名』『嘉靖』\n"
+            "  『烙疤』『棺木』『通宝』等明清/古风/民俗符号，整张 plan 立即驳回 retry。\n"
+            "- 违反此约束的 plan 会被立即驳回 retry，不得使用「叙事需要」为由开脱。\n"
+            "\n"
             "绝对铁律：\n"
             "1. 严格输出 JSON，不写任何散文或解释。\n"
             "2. 每个 scene（场景）必须包含：scene_id、场景地点、出场人物、冲突或张力、"
@@ -156,6 +169,11 @@ class Planner(BaseAgent):
             "      补该缺口，不得在已经满额的 anchor 上继续堆叠；\n"
             "    - 若本章不是 milestone 章但已临近 act 末尾（chapters_left_in_act ≤ 3）\n"
             "      且仍有缺口，必须把缺口 anchor 写进 closing_hook 暗示，给下一章铺路。\n"
+            "15. **`genre_drift_risk` 字段必填**（题材锚定自检凭证）：\n"
+            "    - 必须写出 era.md 里的**主角名**、**时代锚点**、**3 个核心道具名**的实际值，\n"
+            "      格式如：`已对齐 era.md（主角=苏烬，时代=G22 纪元末世，核心道具=契书/灰烬/废墟）`；\n"
+            "    - 写「无」、留空、写笼统的「已对齐」「无风险」 = plan 失效（视同未读 era.md）；\n"
+            "    - 若本章确实有跑偏风险（如大纲条目里出现疑似古风名词），写明风险并说明已规避。\n"
         )
 
         cur_json = json.dumps(cur, ensure_ascii=False, indent=2)
@@ -197,7 +215,8 @@ class Planner(BaseAgent):
             '    "setting_conflict_risk": "<具体提示或 无>",\n'
             '    "power_scaling_risk": "<具体提示或 无>",\n'
             '    "pacing_risk": "<具体提示或 无>",\n'
-            '    "vocab_fatigue_risk": "<具体提示或 无>"\n'
+            '    "vocab_fatigue_risk": "<具体提示或 无>",\n'
+            '    "genre_drift_risk": "<本章是否有「主角名/道具名/时代锚点偏离 era.md」的风险；无风险时必须写 \'已对齐 era.md（主角=X，时代=Y，核心道具=Z）\' 作为自检凭证>"\n'
             '  }\n'
             "}\n"
             "```"

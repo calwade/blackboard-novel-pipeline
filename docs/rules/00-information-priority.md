@@ -53,6 +53,25 @@ Agent 检测到两份来源冲突时：
 - 不得凭"创作直觉"在两者之间折中
 - 必须在对应 Agent 的输出中**显式说明**采信了哪份、丢弃了哪份（写在 plan.json 的 `conflicts_resolved` 字段、verdict.json 的 `evidence` 字段、状态卡的备注列）
 
+## 题材锚 vs 计划锚（题材一致性维度）
+
+在主角名 / 道具名 / 时代锚点这种「题材一致性」维度上，使用以下细化优先级（覆盖默认表）：
+
+| 信息源 | 优先级 |
+|---|---|
+| `state/era.md` | 最高 |
+| `state/writing-style-extra.md` | 次高 |
+| `state/outline.json`（作品级） | 中 |
+| `state/current_status_card.md` | 中 |
+| `state/chapters/ch{N}.plan.json` | 较低（Planner 可能跑偏） |
+
+**冲突仲裁**：plan 写的"无名/嘉靖通宝/烙疤"对 era.md 的"苏烬/末世 G22 纪元/契书"——以 era.md 为准。
+Generator 写正文时按 era.md，并在文末 HTML 注释 `<!-- _planner_drift: 修正 [plan里X] → [era里Y] -->`，
+让 Evaluator 知道 Generator 主动做了仲裁修正、不是又一次跑偏。
+
+注意：这条**只覆盖题材一致性维度**。其他维度（如本章具体场景安排、节拍、爽点配方、scene 顺序）
+plan 仍是权威——不能借此条无视 plan 的全部。
+
 ## 示例冲突与处理
 
 **冲突 A**：`summaries/ch005.md` 说"沈若微去了北京"，但 `chapters/ch006.md` 正文描述她在深圳上班。

@@ -162,6 +162,18 @@ class Generator(BaseAgent):
             + writing_style_extra
             + f"\n\n# 时代/世界观事实包（仅供融入场景，严禁整段复述）\n\n"
             + era
+            + "\n\n🔴【动笔前检查 · 强制】\n\n"
+            + "1. plan 里的「主角名 / 配角名 / 核心道具名 / 地名 / 时代锚点」是否与\n"
+            + "   era.md / writing-style-extra.md 一致？\n"
+            + "2. 若不一致：**以 era.md / writing-style-extra.md 为准**（plan 可能被\n"
+            + "   Planner 写错）。正文用 era.md 的名词，并在文末 HTML 注释里加：\n"
+            + "   `<!-- _planner_drift: 修正 [plan里X] → [era里Y] -->`\n"
+            + "   让 Evaluator 看到。可同时列多条修正，每条一行。\n"
+            + "3. 若 plan 与 era.md 完全脱节（>3 处冲突），不要硬写——直接返回 200 字\n"
+            + "   说明给上层 retry，开头写：`# _planner_drift_abort:` 后面跟具体冲突清单。\n"
+            + "4. 仲裁原则参见 `rules/00-information-priority.md`「题材锚 vs 计划锚」段：\n"
+            + "   主角名 / 道具名 / 时代锚点维度 → era.md > plan.json。\n"
+            + "   其他维度（本章节拍/场景/爽点）plan 仍是权威。\n"
             + (f"\n\n{dna_tips_block}" if dna_tips_block else "")
             + (f"\n\n{milestone_recipe_block}" if milestone_recipe_block else "")
             + "\n\n# ⚠ 最终硬规则（冲突仲裁：与上文冲突时以此为准）\n\n"
