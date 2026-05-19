@@ -119,22 +119,35 @@ def test_handle_output_strips_yaml_fences(bb):
     assert obj["cast"] == []
 
 
-def test_handle_output_invalid_yaml_raises(bb):
-    """Invalid YAML must raise so BaseAgent retry logic can take over."""
-    with pytest.raises(ValueError):
-        CastUpdater()._handle_output(bb, "this: is: not: valid: yaml: : :", chapter=1)
+def test_handle_output_invalid_yaml_does_not_raise(bb):
+    """Unrecoverable YAML must NOT raise — it should warn + return so the
+    main pipeline can continue (cast updates are bookkeeping, not blocking)."""
+    # No prior cast file → file simply isn't created.
+    CastUpdater()._handle_output(bb, "this: is: not: valid: yaml: : :", chapter=1)
+    assert not bb.exists("characters-cast.yaml")
 
 
-def test_handle_output_missing_schema_version_raises(bb):
+def test_handle_output_invalid_yaml_keeps_prior_cast(bb):
+    """When repair fails, the prior cast file must be left untouched."""
+    bb.write_yaml(
+        "characters-cast.yaml",
+        {"schema_version": 1, "last_updated_chapter": 0, "cast": []},
+    )
+    CastUpdater()._handle_output(bb, "this: is: not: valid: yaml: : :", chapter=1)
+    obj = bb.read_yaml("characters-cast.yaml")
+    assert obj["last_updated_chapter"] == 0  # unchanged
+
+
+def test_handle_output_missing_schema_version_skips(bb):
     raw = "last_updated_chapter: 1\ncast: []\n"
-    with pytest.raises(ValueError, match="schema_version"):
-        CastUpdater()._handle_output(bb, raw, chapter=1)
+    CastUpdater()._handle_output(bb, raw, chapter=1)
+    assert not bb.exists("characters-cast.yaml")
 
 
-def test_handle_output_missing_cast_raises(bb):
+def test_handle_output_missing_cast_skips(bb):
     raw = "schema_version: 1\nlast_updated_chapter: 1\n"
-    with pytest.raises(ValueError, match="cast"):
-        CastUpdater()._handle_output(bb, raw, chapter=1)
+    CastUpdater()._handle_output(bb, raw, chapter=1)
+    assert not bb.exists("characters-cast.yaml")
 
 
 # ---------- end-to-end with mocked LLM ----------
