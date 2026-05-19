@@ -1,8 +1,8 @@
-# 28 条铁律 (The Iron Laws)
+# 31 条铁律 (The Iron Laws)
 
 > 每一条都是对 AI 生成小说时最常见失误的否定命题。
 > Evaluator 引用时使用 `iron_law_N` 标识符。
-> 当前共 30 条（1-24 为原版，25-28 为 2026-05-10 借鉴 skill 新增，29 为 2026-05-17 Oracle P0+P1 修复"原地打转"问题新增，30 为 2026-05-17 Oracle P3 修复"长跑被动症"新增）。
+> 当前共 31 条（1-24 为原版，25-28 为 2026-05-10 借鉴 skill 新增，29 为 2026-05-17 Oracle P0+P1 修复"原地打转"问题新增，30 为 2026-05-17 Oracle P3 修复"长跑被动症"新增，31 为 2026-05-19 Oracle 5 环节责任链修复"题材跑偏"症新增）。
 
 ## iron_law_1: 人设一致性
 
@@ -206,3 +206,28 @@
 > 节奏崩溃 / landmine_8 冲突乏力 / landmine_2 套路化爽感 之一）的 evidence 字段
 > **显式标注 `iron_law_30 全局节奏律`**，并引用最近 5 章 anchor 分布表说明缺口。
 > milestone 章节未兑现 beat 时 severity = high（直接判 fail），普通章节连续被动 severity = medium。
+
+## iron_law_31: 题材一致性律
+
+主角名 / 核心道具名 / 时代锚点 / 地标必须与 era.md / writing-style-extra.md
+一致。LLM 训练直觉容易让现代末世跑偏成古风/玄幻，本律强制锚定。
+
+❌ era.md 主角名"苏烬"，正文写"无名"
+❌ era.md 时代"末世第三年灰烬纪年"，正文写"嘉靖二年"
+❌ era.md 核心道具"灰烬契书 / 灰烬炉"，正文写"算盘 / 棺材钉"
+❌ era.md 地标"G22 服务区"，正文写"鸡鸣驿 / 城隍庙 / 蓟镇总兵府"
+
+✅ 主角名严格 ≡ era.md
+✅ 核心道具至少 50% 来自 era.md 词表
+✅ 时代关键词 ≥ 1 处明确出现（如"末世第三年"/"灰烬纪年"等）
+
+severity 分级：
+- 主角名 mismatch → high（致命，整章题材跑偏）
+- 时代关键词 mismatch → high
+- 核心道具 mismatch ≥3 处 → high
+- 仅地标 mismatch → medium
+
+> Evaluator 在 `_handle_output` 中执行机械预扫（`_extract_era_keywords` +
+> `_check_genre_consistency`），命中后写入 verdict.iron_law_violations 数组并
+> 强制 overall_pass=false（high 命中时）。LLM 也会在 prompt 中被提示复核并在
+> evidence 里给出原文引文。

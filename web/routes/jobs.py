@@ -454,6 +454,7 @@ def _dispatch(rec: dict, *, cancel, on_progress, logger) -> None:
         # 产物：presets/<target.id>/
         from src.genre_extractor.miners.novel_dna import (
             mine_book_dna, _synthesize_preset, _write_preset,
+            _structure_dna_tips,
         )
         from pathlib import Path as _Path
 
@@ -505,11 +506,25 @@ def _dispatch(rec: dict, *, cancel, on_progress, logger) -> None:
             target["id"], dna_cards, hint=params.get("hint", ""),
         )
 
+        # Stage 2.5：从 dna_cards 抽 structured tips → dna_structured.yaml
+        # CLI 入口（novel_dna.py main()）一直会跑这一步；Web 入口之前漏掉了
+        # 导致 from-novel 产出的 preset 永远缺 dna_structured.yaml，生产端
+        # Planner 退回 LLM 外推。两个入口必须保持对齐。
+        cancel.check()
+        on_progress(
+            phase="validate", phase_index=4,
+            progress_text="Stage 2.5 · structuring DNA tips",
+        )
+        structured_tips = _structure_dna_tips(dna_cards, synth.get("era_md", ""))
+
         # 写盘
         on_progress(
             phase="validate", phase_index=4,
             progress_text="writing preset files",
         )
-        _write_preset(target["id"], synth, source_paths, dna_cards)
+        _write_preset(
+            target["id"], synth, source_paths, dna_cards,
+            structured_tips=structured_tips,
+        )
     else:
         raise ValueError(f"unknown kind: {kind}")

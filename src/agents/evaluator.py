@@ -107,6 +107,196 @@ def _collect_recent_plans(bb: Blackboard, chapter: int, lookback: int = 5) -> tu
     return summaries, inputs
 
 
+# ---------- iron_law_31 题材一致性律的机械预扫 helper ----------
+
+# 中文人名候选范围：常见汉字（不含数字/标点/英文）。
+# 限制在 2-4 字（覆盖 99% 中文姓名），避免吃下"主角设定/姓名背景"等长 token。
+_NAME_CHARS = r"[\u4e00-\u9fa5]"
+_PROTAGONIST_PATTERNS = [
+    # "主角苏烬"、"姓名: 苏烬"、"姓名：苏烬"、"主角名：苏烬"、"主角姓名"等
+    re.compile(rf"主角(?:姓名|名|名字)?[：:\s]*({_NAME_CHARS}{{2,4}})"),
+    re.compile(rf"姓名[：:\s]+({_NAME_CHARS}{{2,4}})"),
+    re.compile(rf"^[-*]?\s*\*?\*?姓名\*?\*?[：:\s]+({_NAME_CHARS}{{2,4}})", re.M),
+]
+# 时代锚点候选：覆盖末世/纪年/朝代年号/公元年份等。
+# 注意：中文数字（一二三四五…十百千）必须显式匹配——\d 只覆盖 ASCII。
+_CHINESE_DIGIT = "[一二三四五六七八九十百千零〇两]"
+_ERA_ANCHOR_PATTERNS = [
+    re.compile(rf"末世第(?:\d+|{_CHINESE_DIGIT}+)年"),
+    re.compile(r"灰烬纪年"),
+    re.compile(rf"(?:\d+|{_CHINESE_DIGIT}+)年(?:冬|春|夏|秋)"),
+    re.compile(rf"(?:嘉靖|万历|崇祯|康熙|乾隆|光绪)(?:{_CHINESE_DIGIT}|\d){{1,4}}年"),
+    re.compile(rf"公元(?:\d+|{_CHINESE_DIGIT}+)年"),
+]
+
+
+def _extract_era_keywords(era_text: str) -> dict:
+    """Extract canonical genre anchors from era.md.
+
+    Returns dict with 4 keys:
+      - protagonist:  str (单个主角名) 或 ""（抽不到）
+      - era_anchors:  list[str] (时代锚点字面量)
+      - core_objects: list[str] (加粗 **X** 标记的短词，作为核心道具)
+      - landmarks:    list[str] (## 标题里的地名)
+
+    保守优先 — 抽不到就返回空 (后续 _check_genre_consistency 会跳过该维度)。
+    宁可漏抽也不能误抽。
+    """
+    out: dict = {
+        "protagonist": "",
+        "era_anchors": [],
+        "core_objects": [],
+        "landmarks": [],
+    }
+    if not era_text:
+        return out
+
+    # protagonist：扫前 2000 字（开头段落）找首个匹配
+    head = era_text[:2000]
+    for pat in _PROTAGONIST_PATTERNS:
+        m = pat.search(head)
+        if m:
+            out["protagonist"] = m.group(1)
+            break
+
+    # era_anchors：全文搜，去重保序
+    seen_anchors: set[str] = set()
+    for pat in _ERA_ANCHOR_PATTERNS:
+        for m in pat.finditer(era_text):
+            tok = m.group(0)
+            if tok not in seen_anchors:
+                seen_anchors.add(tok)
+                out["era_anchors"].append(tok)
+
+    # core_objects：抽 **X** 加粗标记。限制 1-5 字 + 仅中文（避免吃 **iron_law_31**
+    # 这种英文标记或太长的 **整段说明** 文本）。
+    bold_pat = re.compile(rf"\*\*({_NAME_CHARS}{{1,5}})\*\*")
+    seen_obj: set[str] = set()
+    for m in bold_pat.finditer(era_text):
+        tok = m.group(1)
+        if tok and tok not in seen_obj:
+            seen_obj.add(tok)
+            out["core_objects"].append(tok)
+
+    # landmarks：扫 `## <标题>` 行里冒号后的词或裸地名
+    # 形如 "## G22 服务区" / "## 港岛湾仔" / "## 主要场景：码头/茶餐厅"
+    seen_lm: set[str] = set()
+    for line in era_text.splitlines():
+        m = re.match(r"^##\s+(.+?)\s*$", line)
+        if not m:
+            continue
+        title = m.group(1)
+        # 形如 "主要场景：码头 / 茶餐厅"
+        if "：" in title or ":" in title:
+            _, _, rhs = re.split(r"[：:]", title, maxsplit=1)[0], ":", title.split("：" if "：" in title else ":", 1)[1]
+            for tok in re.split(r"[,，/、\s]+", rhs):
+                tok = tok.strip()
+                if 2 <= len(tok) <= 8 and tok not in seen_lm:
+                    seen_lm.add(tok)
+                    out["landmarks"].append(tok)
+        else:
+            # 裸标题地名（短词，不含分隔符）
+            tok = title.strip()
+            if 2 <= len(tok) <= 10 and tok not in seen_lm:
+                seen_lm.add(tok)
+                out["landmarks"].append(tok)
+
+    return out
+
+
+def _check_genre_consistency(chapter_text: str, kws: dict) -> dict:
+    """Compare chapter_text against era keywords; return mechanical hit report.
+
+    Returns:
+      {
+        "hit":      bool,           # any axis missed
+        "severity": "high"|"medium"|None,
+        "evidence": str|None,       # 若 hit=True 必有 evidence；否则 None
+        "axes":     dict[str, ...], # 每个轴的 raw 命中情况（调试用）
+      }
+
+    severity 分级（per iron_law_31 spec）：
+      - 主角名 mismatch        → high（致命）
+      - 时代锚点全部 mismatch  → high
+      - 核心道具命中率 < 50%   → high (≥3 处不符) / medium (1-2 处不符)
+      - 仅地标 mismatch        → medium
+    """
+    axes: dict = {}
+
+    # 主角
+    has_protagonist = bool(kws.get("protagonist")) and (kws["protagonist"] in chapter_text)
+    axes["protagonist"] = {
+        "expected": kws.get("protagonist", ""),
+        "hit": has_protagonist,
+        "applicable": bool(kws.get("protagonist")),
+    }
+
+    # 时代锚点：全部不出现 = 命中
+    era_anchors = kws.get("era_anchors") or []
+    era_hits = [a for a in era_anchors if a in chapter_text]
+    axes["era_anchors"] = {
+        "expected": era_anchors,
+        "hits": era_hits,
+        "applicable": bool(era_anchors),
+    }
+    era_missed = bool(era_anchors) and len(era_hits) == 0
+
+    # 核心道具：命中率
+    core_objects = kws.get("core_objects") or []
+    obj_hits = [o for o in core_objects if o in chapter_text]
+    obj_total = len(core_objects)
+    obj_ratio = (len(obj_hits) / obj_total) if obj_total > 0 else 1.0
+    axes["core_objects"] = {
+        "expected": core_objects,
+        "hits": obj_hits,
+        "ratio": obj_ratio,
+        "applicable": obj_total > 0,
+    }
+    obj_underperform = obj_total > 0 and obj_ratio < 0.5
+    obj_missed_count = obj_total - len(obj_hits)
+
+    # 地标：任一未命中即 mismatch（弱信号）
+    landmarks = kws.get("landmarks") or []
+    lm_hits = [l for l in landmarks if l in chapter_text]
+    axes["landmarks"] = {
+        "expected": landmarks,
+        "hits": lm_hits,
+        "applicable": bool(landmarks),
+    }
+    lm_missed = bool(landmarks) and len(lm_hits) == 0
+
+    # 判定 severity（按优先级取最重）
+    severity: str | None = None
+    evidence_parts: list[str] = []
+
+    if axes["protagonist"]["applicable"] and not has_protagonist:
+        severity = "high"
+        evidence_parts.append(f"主角名'{kws['protagonist']}'未在正文出现")
+    if era_missed:
+        severity = "high"
+        evidence_parts.append(f"时代锚点{era_anchors}全部未出现")
+    if obj_underperform:
+        # ≥3 处不符 → high；否则 medium
+        if obj_missed_count >= 3:
+            severity = "high"
+        else:
+            severity = severity or "medium"
+        evidence_parts.append(
+            f"核心道具命中率 {len(obj_hits)}/{obj_total} (<50%)"
+        )
+    if lm_missed and severity is None:
+        severity = "medium"
+        evidence_parts.append(f"全部地标{landmarks}未出现")
+
+    hit = severity is not None
+    return {
+        "hit": hit,
+        "severity": severity,
+        "evidence": " / ".join(evidence_parts) if evidence_parts else None,
+        "axes": axes,
+    }
+
+
 class Evaluator(BaseAgent):
     name = "evaluator"
     temperature = 0.0
@@ -120,6 +310,10 @@ class Evaluator(BaseAgent):
         characters = bb.read_text("characters.yaml")
         timeline = bb.read_text("timeline.yaml")
         iron_laws_extra = bb.read_text("iron-laws-extra.md")
+        # era.md：iron_law_31 题材一致性律的对照源。Evaluator 在 _handle_output
+        # 中做机械预扫（_extract_era_keywords + _check_genre_consistency），
+        # LLM 在 prompt 中也被提示复核。era.md 不存在时跳过本律（向后兼容）。
+        era_md = bb.read_text("era.md") if bb.exists("era.md") else ""
         # Read Lesson-3 bookkeeping — these are the authoritative "who knows what"
         # snapshots. Critical for landmine_10 (反派信息越界 / 人设前后矛盾)
         # and landmine_13 (世界观矛盾). Absent/empty files are tolerated (chapter 1).
@@ -166,6 +360,10 @@ class Evaluator(BaseAgent):
             inputs_read.append("state/current_status_card.md")
         if pending_hooks.strip():
             inputs_read.append("state/pending_hooks.md")
+        # era.md drives iron_law_31 (题材一致性律). List it only when present
+        # so the Inspector accurately reflects what the Evaluator actually had.
+        if era_md.strip():
+            inputs_read.append("state/era.md")
 
         system = (
             f"你是网文质检员，本题材（{genre} · {era_label}）方向。\n"
@@ -206,6 +404,10 @@ class Evaluator(BaseAgent):
             "  或推进方向与伏笔表既定走向相反——必须 landmine_10 或 13 命中，"
             "  evidence 同时引原文和对应 hook_id 行。\n"
             "- 状态卡/伏笔池**未提供**（首章或尚未产出）时不适用本两条。\n"
+            "- 题材一致性（iron_law_31）：检查主角名 / 时代锚点 / 核心道具是否与 era.md 一致。"
+            "  LLM 训练直觉常让现代末世跑偏成古风/玄幻，机械预扫已在 verdict 标记，"
+            "  你需要复核并在 evidence 里给出原文引文（例如 era.md 主角名是『苏烬』但本章"
+            "  始终称『无名』即必须命中）。\n"
             "\n"
             "**步骤 4**：决定 overall_pass + top_3_fixes：\n"
             "- 任何 high 命中 → false；2+ medium 命中 → false；其他 → true。\n"
@@ -485,6 +687,53 @@ class Evaluator(BaseAgent):
                         "_source": "static_scan",
                     }
                 )
+
+        # Patch 2 (iron_law_31)：题材一致性机械预扫
+        # 与 Patch 1 同源思路：LLM 训练直觉容易忽略"主角名/时代锚点"这类宏观偏移
+        # （读起来很流畅但已经写成另一个题材了）。Python 直接用关键词命中数说话。
+        # era.md 缺失时跳过（首次跑 / 旧 preset 兼容）。
+        try:
+            era_text = bb.read_text("era.md") if bb.exists("era.md") else ""
+        except Exception:
+            era_text = ""
+        if era_text.strip():
+            kws = _extract_era_keywords(era_text)
+            # 只有抽到任一关键词才检查（保守：抽不到就当无信号，不误报）
+            has_signal = (
+                bool(kws.get("protagonist"))
+                or bool(kws.get("era_anchors"))
+                or bool(kws.get("core_objects"))
+            )
+            if has_signal:
+                consistency = _check_genre_consistency(chapter_text, kws)
+                if consistency["hit"]:
+                    # 写入 verdict.iron_law_violations 数组（不挤占 19 个 landmine 槽位）
+                    iron_law_violations = verdict.get("iron_law_violations") or []
+                    if not isinstance(iron_law_violations, list):
+                        iron_law_violations = []
+                    iron_law_violations.append({
+                        "iron_law": "iron_law_31",
+                        "severity": consistency["severity"],
+                        "evidence": consistency["evidence"],
+                        "_source": "mechanical_scan",
+                        "axes": consistency["axes"],
+                    })
+                    verdict["iron_law_violations"] = iron_law_violations
+                    # high 严重度直接判 fail
+                    if consistency["severity"] == "high":
+                        verdict["overall_pass"] = False
+                    # 也追加到 top_3_fixes（若仍有空位），让 Fixer 看到这条
+                    if "top_3_fixes" not in verdict or verdict["top_3_fixes"] is None:
+                        verdict["top_3_fixes"] = []
+                    if len(verdict["top_3_fixes"]) < 3:
+                        verdict["top_3_fixes"].append({
+                            "where": (consistency["evidence"] or "iron_law_31")[:60],
+                            "what": (
+                                "题材一致性修复：把主角名/时代锚点/核心道具改回 era.md "
+                                "约定（如主角应为『苏烬』/时代为『末世第三年』）"
+                            ),
+                            "_source": "iron_law_31_scan",
+                        })
 
         bb.write_json(f"chapters/ch{chapter:03d}.verdict.json", verdict)
 

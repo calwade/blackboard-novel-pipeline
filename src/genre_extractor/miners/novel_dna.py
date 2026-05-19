@@ -546,8 +546,26 @@ def _write_preset(
     source_books: list[Path],
     dna_cards: list[BookDNA],
     structured_tips: dict | None = None,
+    *,
+    allow_missing_structure: bool = False,
 ) -> Path:
-    """Persist the synthesized preset to presets/<preset_id>/."""
+    """Persist the synthesized preset to presets/<preset_id>/.
+
+    Contract: `structured_tips` must be a dict (the Stage 2.5 output).
+    Passing None raises ValueError to prevent silent regressions where the
+    Web entry point or a future caller forgets to run Stage 2.5 — that's
+    exactly the bug that left preset/2 without dna_structured.yaml.
+
+    Tests / fixtures that legitimately want a no-structure preset must
+    pass allow_missing_structure=True.
+    """
+    if structured_tips is None and not allow_missing_structure:
+        raise ValueError(
+            "_write_preset requires structured_tips (the Stage 2.5 output, "
+            "writes presets/<id>/dna_structured.yaml). Got None — caller "
+            "forgot to run _structure_dna_tips or swallowed its exception. "
+            "Pass allow_missing_structure=True only for tests / fixtures."
+        )
     preset_dir = config.PRESETS_DIR / preset_id
     if preset_dir.exists():
         raise FileExistsError(
@@ -867,12 +885,124 @@ def _structure_dna_tips(
 
 # ---------- CLI ----------
 
+
+@dataclass
+class _SimpleBookDNA:
+    """Minimal stand-in for BookDNA when reconstructing from already-archived
+    dna_cards/*.md (backfill path).
+
+    Stage 2.5's `_structure_dna_tips` only reads `.title` and
+    `.digest_markdown` (see line ~795), so we don't need to fake the rest of
+    the BookDNA contract (source_path / total_chapters / window_notes).
+    """
+    title: str
+    digest_markdown: str
+
+
+def _minimal_structured_tips_skeleton() -> dict:
+    """Return a schema-compliant but content-empty dna_structured.yaml.
+
+    Used by `--backfill-structured --use-mock` so callers without an API
+    key can still unblock downstream pipeline (Planner only consumes this
+    file when present + matching chapter_type bucket non-empty; an empty
+    skeleton makes Planner silently fall back to LLM extrapolation, which
+    is the pre-Stage-2.5 behavior — strictly no worse than today).
+    """
+    return {
+        "schema_version": 1,
+        "tips_by_chapter_type": {k: [] for k in ("战斗", "布局", "过渡", "回收")},
+        "tips_by_scene_purpose": {k: [] for k in ("推进主线", "塑造人物", "埋伏笔")},
+        "hook_recipes": {"opening_hooks": [], "closing_hooks": []},
+        "universal": {
+            "writing_style": [],
+            "value_anchors": [],
+            "character_handling": [],
+        },
+        "plot_unit_structure": {"unit_size": 5, "pattern": [], "pacing": {}},
+        "payoff_recipes": {
+            k: {"formula": "", "dialog_template": [], "sample_50_chars": ""}
+            for k in ("爽感", "掌控感", "黑色幽默", "生存智慧")
+        },
+        "villain_defeat_patterns": [],
+        "volume_transition_techniques": {
+            "scaling_method": "",
+            "arc_closer_template": "",
+            "next_arc_opener_template": "",
+        },
+        "_backfill_mock": True,
+    }
+
+
+def _run_backfill_structured(preset_id: str, *, use_mock: bool = False) -> int:
+    """Read presets/<preset_id>/dna_cards/*.md + era.md, run Stage 2.5,
+    write presets/<preset_id>/dna_structured.yaml.
+
+    This is the recovery path for presets generated before the Web entry
+    point was wired to call `_structure_dna_tips`. The CLI entry point
+    (`main()`) has always called Stage 2.5; only the Web from-novel job
+    forgot to. preset/2 (and any other Web-generated preset before the
+    fix) is missing dna_structured.yaml — this restores it without
+    re-mining 21 windows × 3 books.
+    """
+    preset_dir = config.PRESETS_DIR / preset_id
+    if not preset_dir.exists():
+        print(f"ERROR: preset {preset_id} not found at {preset_dir}", file=sys.stderr)
+        return 1
+
+    out = preset_dir / "dna_structured.yaml"
+    if out.exists():
+        print(f"WARN: {out} already exists, will be overwritten", file=sys.stderr)
+
+    cards_dir = preset_dir / "dna_cards"
+    if not cards_dir.exists():
+        print(f"ERROR: {cards_dir} not found — preset has no archived DNA cards "
+              f"to backfill from", file=sys.stderr)
+        return 1
+
+    # Read all cards in stable lexicographic order (matches _write_preset's
+    # write order — same set, same content).
+    dna_cards: list[_SimpleBookDNA] = []
+    for card_path in sorted(cards_dir.glob("*.md")):
+        dna_cards.append(_SimpleBookDNA(
+            title=card_path.stem,
+            digest_markdown=card_path.read_text(encoding="utf-8"),
+        ))
+    if not dna_cards:
+        print(f"ERROR: no *.md DNA cards in {cards_dir}", file=sys.stderr)
+        return 1
+
+    era_path = preset_dir / "era.md"
+    era_md = era_path.read_text(encoding="utf-8") if era_path.exists() else ""
+
+    if use_mock:
+        print(f"[backfill] --use-mock: skipping LLM call, writing minimal skeleton")
+        structured = _minimal_structured_tips_skeleton()
+    else:
+        print(f"[backfill] preset={preset_id} cards={len(dna_cards)} era_md={len(era_md)}b → calling LLM…")
+        # _structure_dna_tips only touches .title + .digest_markdown on each
+        # card, so _SimpleBookDNA satisfies its contract. (Type-checker may
+        # gripe; runtime is correct.)
+        structured = _structure_dna_tips(dna_cards, era_md)  # type: ignore[arg-type]
+
+    out.write_text(
+        yaml.safe_dump(structured, allow_unicode=True, sort_keys=False, width=100),
+        encoding="utf-8",
+    )
+    n_buckets = len(structured.get("tips_by_chapter_type", {}))
+    n_hooks = (
+        len(structured.get("hook_recipes", {}).get("opening_hooks", []))
+        + len(structured.get("hook_recipes", {}).get("closing_hooks", []))
+    )
+    print(f"✓ {out} written (chapter_type={n_buckets} buckets, hooks={n_hooks})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="从 N 本素材小说融合创造新 preset（同框架换核心设定）",
     )
-    parser.add_argument("preset_id", help="新建 preset 的 id（小写字母数字-）")
-    parser.add_argument("novels", nargs="+", help="素材小说 txt 路径")
+    parser.add_argument("preset_id", nargs="?", help="新建 preset 的 id（小写字母数字-）")
+    parser.add_argument("novels", nargs="*", help="素材小说 txt 路径")
     parser.add_argument(
         "--windows-per-book", type=int, default=WINDOWS_PER_BOOK,
         help=f"每本小说随机抽几个 {WINDOW_SIZE} 章窗口（默认 {WINDOWS_PER_BOOK}）",
@@ -893,7 +1023,25 @@ def main(argv: list[str] | None = None) -> int:
         "--dna-out", type=str, default="",
         help="DNA 卡额外归档目录（相对仓库根）；留空则只在 preset 内归档",
     )
+    parser.add_argument(
+        "--backfill-structured", metavar="PRESET_ID", default=None,
+        help="对已有 preset 跑一次 Stage 2.5（读 dna_cards/ + era.md → 产 dna_structured.yaml）。"
+             "用于补救漏掉 Stage 2.5 的旧 preset，不重抽窗口、不重新合成。",
+    )
+    parser.add_argument(
+        "--use-mock", action="store_true",
+        help="搭配 --backfill-structured 使用：不调真实 LLM，写一份 minimal 合规 dna_structured.yaml"
+             "（用于无 API key 或 CI / 快速解锁下游流水线）",
+    )
     args = parser.parse_args(argv)
+
+    # ---- backfill 分支（标志位优先；不需要 preset_id / novels 位置参数）----
+    if args.backfill_structured:
+        return _run_backfill_structured(args.backfill_structured, use_mock=args.use_mock)
+
+    # 主流程必需 preset_id + 至少 1 本 novel
+    if not args.preset_id or not args.novels:
+        parser.error("preset_id 和 novels 是主流程必需的；如果只想补 dna_structured.yaml 请用 --backfill-structured")
 
     source_paths = [Path(p) for p in args.novels]
     for p in source_paths:
@@ -955,21 +1103,19 @@ def main(argv: list[str] | None = None) -> int:
     synth = _synthesize_preset(args.preset_id, dna_cards, hint=args.hint)
 
     # Stage 2.5: 把 DNA 卡结构化为 chapter_type × scene_purpose 可查表
+    # 历史上这里曾用 try/except 吞掉异常 + structured_tips=None 让 _write_preset
+    # 写出无 dna_structured.yaml 的残缺 preset，导致下游 Planner 退回 LLM 外推但
+    # 用户毫不知情。改为不捕获——Stage 2.5 失败立即让整个 run 失败，强迫用户去
+    # 看 prompts_log.jsonl 找根因或补 --use-mock 显式选择 minimal skeleton。
     print(f"\n========== Stage 2.5: 结构化 DNA tips（生产端消费） ==========")
-    try:
-        structured_tips = _structure_dna_tips(dna_cards, synth["era_md"])
-        print(
-            f"  tips: "
-            f"chapter_type={len(structured_tips['tips_by_chapter_type'])} 桶 · "
-            f"scene_purpose={len(structured_tips['tips_by_scene_purpose'])} 桶 · "
-            f"opening_hooks={len(structured_tips['hook_recipes'].get('opening_hooks', []))} · "
-            f"closing_hooks={len(structured_tips['hook_recipes'].get('closing_hooks', []))}"
-        )
-    except Exception as e:
-        print(f"  ✗ structure failed: {e}")
-        print(f"  preset 仍会写入，但不含 dna_structured.yaml；生产端退回到"
-              f" LLM 外推。")
-        structured_tips = None
+    structured_tips = _structure_dna_tips(dna_cards, synth["era_md"])
+    print(
+        f"  tips: "
+        f"chapter_type={len(structured_tips['tips_by_chapter_type'])} 桶 · "
+        f"scene_purpose={len(structured_tips['tips_by_scene_purpose'])} 桶 · "
+        f"opening_hooks={len(structured_tips['hook_recipes'].get('opening_hooks', []))} · "
+        f"closing_hooks={len(structured_tips['hook_recipes'].get('closing_hooks', []))}"
+    )
 
     preset_dir = _write_preset(
         args.preset_id, synth, source_paths, dna_cards,
